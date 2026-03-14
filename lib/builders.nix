@@ -33,6 +33,10 @@ in
         cp ${builtins.toFile "agent-${name}.md" content} "$out/agents/${name}.md"
       '';
 
+      skillContent =
+        name: skill:
+        if skill.src != null then builtins.readFile (skill.src + "/SKILL.md") else skill.content;
+
       writeSkill = name: content: ''
         mkdir -p "$out/skills/${name}"
         cp ${builtins.toFile "skill-${name}.md" content} "$out/skills/${name}/SKILL.md"
@@ -41,7 +45,9 @@ in
       commonOutputs = ''
         mkdir -p "$out/agents" "$out/skills"
         ${lib.concatStringsSep "\n" (lib.mapAttrsToList writeAgent generated.agents)}
-        ${lib.concatStringsSep "\n" (lib.mapAttrsToList writeSkill generated.skills)}
+        ${lib.concatStringsSep "\n" (
+          lib.mapAttrsToList (name: skill: writeSkill name (skillContent name skill)) config.skills
+        )}
       '';
 
       opencodeOutputs = ''
