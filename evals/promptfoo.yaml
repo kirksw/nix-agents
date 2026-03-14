@@ -1,3 +1,6 @@
 description: "nix-agents skill effectiveness benchmark"
 tests:
   - file://suites/skill-baseline/config.yaml
+  - file://suites/skill-delegation/config.yaml
+  - file://suites/skill-nix-flake/config.yaml
+  - file://suites/skill-secrets/config.yaml

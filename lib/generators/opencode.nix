@@ -8,13 +8,17 @@ let
 
   workflowGuide = if src != null then builtins.readFile "${src}/AGENTS.md" else "";
 
-  tierModels = {
+  generatorDefaults = {
     fast = "anthropic/claude-haiku-4-5-20251001";
     balanced = "anthropic/claude-sonnet-4-6";
     powerful = "google/gemini-2.5-pro";
     reasoning = "anthropic/claude-opus-4-6";
   };
+  tierModels = generatorDefaults // config.tierMapping;
   resolveModel = m: tierModels.${m} or m;
+
+  defaults = config.defaultPermissions;
+  resolvePermField = field: agentPerm: if agentPerm != null then agentPerm else defaults.${field};
 
   normalizePermission =
     permission:
@@ -56,10 +60,10 @@ let
       ++ lib.optional (agent.reasoningEffort != null) "reasoningEffort: ${agent.reasoningEffort}"
       ++ [ "permission:" ]
       ++ [
-        (renderPermField 2 "edit" agent.permissions.edit)
-        (renderPermField 2 "bash" agent.permissions.bash)
-        (renderPermField 2 "task" agent.permissions.task)
-        (renderPermField 2 "webfetch" agent.permissions.webfetch)
+        (renderPermField 2 "edit" (resolvePermField "edit" agent.permissions.edit))
+        (renderPermField 2 "bash" (resolvePermField "bash" agent.permissions.bash))
+        (renderPermField 2 "task" (resolvePermField "task" agent.permissions.task))
+        (renderPermField 2 "webfetch" (resolvePermField "webfetch" agent.permissions.webfetch))
       ]
       ++ lib.mapAttrsToList (k: v: "${k}: ${builtins.toJSON v}") agent.overrides.opencode;
     in

@@ -1,3 +1,5 @@
+# EXPERIMENTAL: Codex generator output format may change.
+# MCP server config and permission handling are minimal compared to OpenCode/Claude generators.
 {
   lib,
   config,
@@ -6,13 +8,17 @@
 let
   agentsMdGenerator = import ./agents-md.nix { inherit lib; };
 
-  tierModels = {
+  generatorDefaults = {
     fast = "gpt-4.1-mini";
     balanced = "gpt-4.1";
     powerful = "gpt-4.1";
     reasoning = "o3";
   };
+  tierModels = generatorDefaults // config.tierMapping;
   resolveModel = m: tierModels.${m} or m;
+
+  defaults = config.defaultPermissions;
+  resolvePermField = field: agentPerm: if agentPerm != null then agentPerm else defaults.${field};
 
   normalizePermission =
     permission:
@@ -29,9 +35,9 @@ let
     let
       normalized = normalizePermission permission;
       entries = lib.mapAttrsToList (pattern: value: "${pattern}=${value}") normalized.rules;
-      defaults = "default=${normalized.default}";
+      defaultEntry = "default=${normalized.default}";
     in
-    [ defaults ] ++ entries;
+    [ defaultEntry ] ++ entries;
 
   renderFrontmatter =
     name: agent:
@@ -45,10 +51,10 @@ let
         inherit (agent) temperature;
       };
       permissions = {
-        edit = permissionSummary agent.permissions.edit;
-        bash = permissionSummary agent.permissions.bash;
-        task = permissionSummary agent.permissions.task;
-        webfetch = [ "default=${agent.permissions.webfetch}" ];
+        edit = permissionSummary (resolvePermField "edit" agent.permissions.edit);
+        bash = permissionSummary (resolvePermField "bash" agent.permissions.bash);
+        task = permissionSummary (resolvePermField "task" agent.permissions.task);
+        webfetch = [ "default=${resolvePermField "webfetch" agent.permissions.webfetch}" ];
       };
     in
     builtins.toJSON (body // { inherit permissions; });

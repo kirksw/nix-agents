@@ -1,8 +1,8 @@
 { lib }:
 let
-  types = import ./types.nix { inherit lib; };
-  evalModules = import ./eval.nix { inherit lib types; };
-  builders = import ./builders.nix { inherit lib evalModules; };
+  types = import ./core/types.nix { inherit lib; };
+  evalModules = import ./core/eval.nix { inherit lib types; };
+  builders = import ./core/builders.nix { inherit lib evalModules; };
 in
 {
   inherit types evalModules;

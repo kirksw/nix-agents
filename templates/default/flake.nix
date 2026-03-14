@@ -23,30 +23,71 @@
         agentPkgs = llm-agents.packages.${system};
         agentsLib = nix-agents.lib.${system};
 
+        # Available presets:
+        #   ${nix-agents}/presets/default.nix   - full team (all agents, skills, MCP servers)
+        #   ${nix-agents}/presets/minimal.nix   - code-monkey + explore only
+        #   ${nix-agents}/presets/security.nix  - minimal + bottleneck + code-red
+        preset = "${nix-agents}/presets/default.nix";
+
         myAgentSystem = agentsLib.mkAgentSystem {
           inherit pkgs;
+          target = "opencode";
           modules = [
-            ../../presets/default.nix
+            preset
+
+            # Add your own agent definitions
             ./agents/my-agent.nix
+
+            # Inline overrides
             {
-              agents.code-monkey.model = "anthropic/claude-sonnet-4-5";
+              # Override model tier mappings globally
+              # tierMapping.reasoning = "anthropic/claude-opus-4-6";
+              # tierMapping.balanced = "anthropic/claude-sonnet-4-5";
+
+              # Override system-wide permission defaults
+              # defaultPermissions = {
+              #   edit = "allow";
+              #   bash = "ask";
+              # };
+
+              # Override a specific agent's model
+              # agents.code-monkey.model = "anthropic/claude-sonnet-4-5";
+
+              # Add an MCP server
               mcpServers.my-server = {
                 type = "remote";
                 url = "https://my-api.example.com/mcp";
               };
             }
           ];
-          target = "opencode";
+        };
+
+        claudeSystem = agentsLib.mkAgentSystem {
+          inherit pkgs;
+          target = "claude";
+          modules = [
+            preset
+            ./agents/my-agent.nix
+          ];
         };
       in
       {
         packages = {
           opencode-config = myAgentSystem;
+          claude-config = claudeSystem;
+
           opencode = agentsLib.mkWrappedTool {
             inherit pkgs;
             target = "opencode";
             tool = agentPkgs.opencode;
             agentSystem = myAgentSystem;
+          };
+
+          claude = agentsLib.mkWrappedTool {
+            inherit pkgs;
+            target = "claude";
+            tool = agentPkgs.claude-code;
+            agentSystem = claudeSystem;
           };
         };
 

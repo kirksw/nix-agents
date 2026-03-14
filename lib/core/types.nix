@@ -63,20 +63,24 @@ let
   permissionsType = types.submodule {
     options = {
       edit = mkOption {
-        type = permissionField;
-        default = "deny";
+        type = types.nullOr permissionField;
+        default = null;
+        description = "Edit permission. Null falls back to system defaultPermissions.";
       };
       bash = mkOption {
-        type = permissionField;
-        default = "deny";
+        type = types.nullOr permissionField;
+        default = null;
+        description = "Bash permission. Null falls back to system defaultPermissions.";
       };
       task = mkOption {
-        type = permissionField;
-        default = "deny";
+        type = types.nullOr permissionField;
+        default = null;
+        description = "Task permission. Null falls back to system defaultPermissions.";
       };
       webfetch = mkOption {
-        type = permission;
-        default = "deny";
+        type = types.nullOr permission;
+        default = null;
+        description = "Webfetch permission. Null falls back to system defaultPermissions.";
       };
     };
   };

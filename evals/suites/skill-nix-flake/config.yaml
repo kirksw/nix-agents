@@ -1,0 +1,19 @@
+description: "Test nix-flake-ops skill effectiveness"
+prompts:
+  - "Add a new package to the flake that wraps jq."
+  - "Create a devShell with rust tooling."
+providers:
+  - id: anthropic:claude-sonnet-4-6
+tests:
+  - vars:
+      prompt: "Add a new package to the flake that wraps jq."
+    assert:
+      - type: contains-any
+        value:
+          - "mkDerivation"
+          - "writeShellScriptBin"
+  - vars:
+      prompt: "Create a devShell with rust tooling."
+    assert:
+      - type: contains
+        value: "mkShell"

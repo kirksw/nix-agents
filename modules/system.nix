@@ -2,7 +2,12 @@
 let
   normalizePermissionSet =
     permission:
-    if builtins.isString permission then
+    if permission == null then
+      {
+        default = "deny";
+        rules = { };
+      }
+    else if builtins.isString permission then
       {
         default = permission;
         rules = { };
@@ -83,10 +88,59 @@ let
     checkDelegatesExist && checkNoSelfDelegation && checkTaskPerms && checkSkillRefs && checkMcpRefs;
 in
 {
-  options._validated = lib.mkOption {
-    type = lib.types.bool;
-    default = allValid;
-    internal = true;
-    description = "Internal option that forces graph validation at eval time.";
+  options = {
+    tierMapping = lib.mkOption {
+      type = lib.types.attrsOf lib.types.str;
+      default = { };
+      description = ''
+        Override model tier to concrete model-string mappings.
+        Keys: fast, balanced, powerful, reasoning.
+        Generators merge these over their built-in defaults.
+      '';
+      example = {
+        fast = "anthropic/claude-haiku-4-5-20251001";
+        reasoning = "anthropic/claude-opus-4-6";
+      };
+    };
+
+    defaultPermissions = lib.mkOption {
+      type =
+        let
+          permEnum = lib.types.enum [
+            "allow"
+            "deny"
+            "ask"
+          ];
+        in
+        lib.types.submodule {
+          options = {
+            edit = lib.mkOption {
+              type = permEnum;
+              default = "deny";
+            };
+            bash = lib.mkOption {
+              type = permEnum;
+              default = "deny";
+            };
+            task = lib.mkOption {
+              type = permEnum;
+              default = "deny";
+            };
+            webfetch = lib.mkOption {
+              type = permEnum;
+              default = "deny";
+            };
+          };
+        };
+      default = { };
+      description = "System-wide permission defaults. Generators use these as fallback for agents with null permissions.";
+    };
+
+    _validated = lib.mkOption {
+      type = lib.types.bool;
+      default = allValid;
+      internal = true;
+      description = "Internal option that forces graph validation at eval time.";
+    };
   };
 }

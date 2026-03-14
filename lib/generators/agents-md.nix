@@ -3,6 +3,9 @@
 let
   agentNames = builtins.attrNames agents;
 
+  mermaidGenerator = import ./mermaid.nix { inherit lib; };
+  mermaidGraph = mermaidGenerator { inherit agents; };
+
   patternEntries = lib.foldl' (
     acc: name:
     let
@@ -30,6 +33,12 @@ in
   # AGENTS Orchestration
 
   This document is generated from the agent graph definition.
+
+  ## Delegation Graph
+
+  ```mermaid
+  ${mermaidGraph}
+  ```
 
   ## When to delegate
 

@@ -1,9 +1,9 @@
 { lib, evalModules }:
 let
-  opencodeGenerator = import ./generators/opencode.nix;
-  claudeCodeGenerator = import ./generators/claude-code.nix;
-  codexGenerator = import ./generators/codex.nix;
-  piGenerator = import ./generators/pi.nix;
+  opencodeGenerator = import ../generators/opencode.nix;
+  claudeCodeGenerator = import ../generators/claude-code.nix;
+  codexGenerator = import ../generators/codex.nix;
+  piGenerator = import ../generators/pi.nix;
 
   mkGenerator =
     target:
@@ -70,6 +70,7 @@ in
       codexOutputs = ''
         ${commonOutputs}
         cp ${builtins.toFile "AGENTS.md" generated.agentsMd} "$out/AGENTS.md"
+        echo "Codex generator is experimental. Output format may change." > "$out/EXPERIMENTAL"
       '';
 
       piOutputs = ''

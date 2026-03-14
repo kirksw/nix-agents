@@ -14,6 +14,6 @@ in
   agentsMd = workflowGuide;
   agentListMd = agentsMdGenerator { inherit (config) agents; };
 
-  extensions = if src != null then "${src}/extensions" else null;
-  prompts = if src != null then "${src}/prompts" else null;
+  extensions = if src != null then "${src}/tools/pi/extensions" else null;
+  prompts = if src != null then "${src}/tools/pi/prompts" else null;
 }

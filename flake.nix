@@ -43,12 +43,22 @@
         codexConfig = mkConfig "codex";
         piConfig = mkConfigWithSrc "pi";
 
-        piCodingAgent = pkgs.callPackage ./packages/pi-coding-agent { };
+        piCodingAgent = pkgs.callPackage ./tools/pi/package { };
 
         nixFiles = pkgs.lib.fileset.toSource {
           root = ./.;
           fileset = pkgs.lib.fileset.fileFilter (f: f.hasExt "nix") ./.;
         };
+
+        evaluatedConfig = library.evalModules { modules = defaultModules; };
+        mermaidGenerator = import ./lib/generators/mermaid.nix { inherit (pkgs) lib; };
+        mermaidOutput = mermaidGenerator { inherit (evaluatedConfig.config) agents; };
+
+        graphScript = pkgs.writeShellScriptBin "graph" ''
+          cat <<'MERMAID'
+          ${mermaidOutput}
+          MERMAID
+        '';
 
         benchScript = pkgs.writeShellScriptBin "bench" ''
           set -euo pipefail
@@ -164,9 +174,30 @@
             program = "${syncAgents}/bin/sync-agents";
             meta.description = "Sync agent configs to local config directories";
           };
+          graph = {
+            type = "app";
+            program = "${graphScript}/bin/graph";
+          };
           bench = {
             type = "app";
             program = "${benchScript}/bin/bench";
+          };
+          fmt = {
+            type = "app";
+            program = "${pkgs.writeShellScriptBin "fmt" ''
+              set -euo pipefail
+              find . -name '*.nix' -not -path '*/result/*' -exec ${pkgs.nixfmt-rfc-style}/bin/nixfmt {} +
+            ''}/bin/fmt";
+          };
+          lint = {
+            type = "app";
+            program = "${pkgs.writeShellScriptBin "lint" ''
+              set -euo pipefail
+              echo "==> statix"
+              ${pkgs.statix}/bin/statix check .
+              echo "==> deadnix"
+              ${pkgs.deadnix}/bin/deadnix --fail .
+            ''}/bin/lint";
           };
         };
 
@@ -204,6 +235,8 @@
             touch $out
           '';
 
+          config-gen-pi = piConfig;
+
           schema-compat-claude =
             pkgs.runCommand "schema-compat-claude"
               {
@@ -215,12 +248,66 @@
                   ${claudeConfig}/settings.json
                 touch $out
               '';
+
+          schema-compat-opencode =
+            pkgs.runCommand "schema-compat-opencode"
+              {
+                nativeBuildInputs = [ pkgs.check-jsonschema ];
+              }
+              ''
+                check-jsonschema \
+                  --schemafile ${./lib/schemas/opencode-config.json} \
+                  ${opencodeConfig}/opencode.json
+                touch $out
+              '';
+
+          wrapper-smoke-opencode = pkgs.runCommand "wrapper-smoke-opencode" { } ''
+            ${pkgs.bash}/bin/bash -n ${
+              library.mkWrappedTool {
+                inherit pkgs;
+                target = "opencode";
+                tool = agentPkgs.opencode;
+                agentSystem = opencodeConfig;
+              }
+            }/bin/opencode
+            test -f ${opencodeConfig}/opencode.json
+            test -d ${opencodeConfig}/agents
+            touch $out
+          '';
+
+          wrapper-smoke-claude = pkgs.runCommand "wrapper-smoke-claude" { } ''
+            ${pkgs.bash}/bin/bash -n ${
+              library.mkWrappedTool {
+                inherit pkgs;
+                target = "claude";
+                tool = agentPkgs.claude-code;
+                agentSystem = claudeConfig;
+              }
+            }/bin/claude
+            test -f ${claudeConfig}/settings.json
+            test -f ${claudeConfig}/.mcp.json
+            test -d ${claudeConfig}/agents
+            touch $out
+          '';
+
+          wrapper-smoke-codex = pkgs.runCommand "wrapper-smoke-codex" { } ''
+            ${pkgs.bash}/bin/bash -n ${
+              library.mkWrappedTool {
+                inherit pkgs;
+                target = "codex";
+                tool = agentPkgs.codex;
+                agentSystem = codexConfig;
+              }
+            }/bin/codex
+            test -d ${codexConfig}/agents
+            touch $out
+          '';
         };
       }
     )
     // {
       overlays.default = final: prev: {
-        pi-coding-agent = final.callPackage ./packages/pi-coding-agent { };
+        pi-coding-agent = final.callPackage ./tools/pi/package { };
       };
 
       templates.default = {

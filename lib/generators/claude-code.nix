@@ -6,13 +6,17 @@
 let
   agentsMdGenerator = import ./agents-md.nix { inherit lib; };
 
-  tierModels = {
+  generatorDefaults = {
     fast = "claude-haiku-4-5-20251001";
     balanced = "claude-sonnet-4-6";
     powerful = "claude-sonnet-4-6";
     reasoning = "claude-opus-4-6";
   };
+  tierModels = generatorDefaults // config.tierMapping;
   resolveModel = m: tierModels.${m} or m;
+
+  defaults = config.defaultPermissions;
+  resolvePermField = field: agentPerm: if agentPerm != null then agentPerm else defaults.${field};
 
   normalizePermission =
     permission:
@@ -66,13 +70,17 @@ let
   renderPermissionArrays =
     agent:
     let
-      edit = formatPermission agent.permissions.edit "Edit";
-      bash = formatPermission agent.permissions.bash "Bash";
-      task = formatPermission agent.permissions.task "Task";
+      editPerm = resolvePermField "edit" agent.permissions.edit;
+      bashPerm = resolvePermField "bash" agent.permissions.bash;
+      taskPerm = resolvePermField "task" agent.permissions.task;
+      webfetchPerm = resolvePermField "webfetch" agent.permissions.webfetch;
+      edit = formatPermission editPerm "Edit";
+      bash = formatPermission bashPerm "Bash";
+      task = formatPermission taskPerm "Task";
       webfetch = {
-        allow = if agent.permissions.webfetch == "allow" then [ "Webfetch:*" ] else [ ];
-        deny = if agent.permissions.webfetch == "deny" then [ "Webfetch:*" ] else [ ];
-        ask = if agent.permissions.webfetch == "ask" then [ "Webfetch:*" ] else [ ];
+        allow = if webfetchPerm == "allow" then [ "Webfetch:*" ] else [ ];
+        deny = if webfetchPerm == "deny" then [ "Webfetch:*" ] else [ ];
+        ask = if webfetchPerm == "ask" then [ "Webfetch:*" ] else [ ];
       };
     in
     {
