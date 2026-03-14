@@ -50,6 +50,17 @@
           fileset = pkgs.lib.fileset.fileFilter (f: f.hasExt "nix") ./.;
         };
 
+        benchScript = pkgs.writeShellScriptBin "bench" ''
+          set -euo pipefail
+          if ! command -v promptfoo &>/dev/null; then
+            echo "promptfoo not found. Install with: npm install -g promptfoo"
+            exit 1
+          fi
+          export ANTHROPIC_API_KEY="''${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY must be set}"
+          cd ${./evals}
+          exec promptfoo eval --config promptfoo.yaml "$@"
+        '';
+
         syncAgents = pkgs.writeShellScriptBin "sync-agents" ''
           set -euo pipefail
 
@@ -152,6 +163,10 @@
             type = "app";
             program = "${syncAgents}/bin/sync-agents";
             meta.description = "Sync agent configs to local config directories";
+          };
+          bench = {
+            type = "app";
+            program = "${benchScript}/bin/bench";
           };
         };
 
