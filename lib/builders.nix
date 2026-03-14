@@ -3,6 +3,7 @@ let
   opencodeGenerator = import ./generators/opencode.nix;
   claudeCodeGenerator = import ./generators/claude-code.nix;
   codexGenerator = import ./generators/codex.nix;
+  piGenerator = import ./generators/pi.nix;
 
   mkGenerator =
     target:
@@ -10,6 +11,8 @@ let
       claudeCodeGenerator
     else if target == "codex" then
       codexGenerator
+    else if target == "pi" then
+      piGenerator
     else
       opencodeGenerator;
 in
@@ -19,11 +22,12 @@ in
       pkgs,
       modules ? [ ],
       target ? "opencode",
+      src ? null,
     }:
     let
       evaluated = evalModules { inherit modules; };
       inherit (evaluated) config;
-      generated = mkGenerator target { inherit lib config; };
+      generated = mkGenerator target { inherit lib config src; };
 
       writeAgent = name: content: ''
         cp ${builtins.toFile "agent-${name}.md" content} "$out/agents/${name}.md"
@@ -58,11 +62,26 @@ in
         cp ${builtins.toFile "AGENTS.md" generated.agentsMd} "$out/AGENTS.md"
       '';
 
+      piOutputs = ''
+        ${commonOutputs}
+        cp ${builtins.toFile "AGENTS.md" generated.agentsMd} "$out/AGENTS.md"
+        ${lib.optionalString (generated.extensions != null) ''
+          mkdir -p "$out/extensions"
+          cp -r "${generated.extensions}"/* "$out/extensions/"
+        ''}
+        ${lib.optionalString (generated.prompts != null) ''
+          mkdir -p "$out/prompts"
+          cp -r "${generated.prompts}"/* "$out/prompts/"
+        ''}
+      '';
+
       outputScript =
         if target == "claude" then
           claudeOutputs
         else if target == "codex" then
           codexOutputs
+        else if target == "pi" then
+          piOutputs
         else
           opencodeOutputs;
     in

@@ -1,6 +1,8 @@
-{ lib, config }:
+{ lib, config, src ? null }:
 let
   agentsMdGenerator = import ./agents-md.nix { inherit lib; };
+
+  workflowGuide = if src != null then builtins.readFile "${src}/AGENTS.md" else "";
 
   normalizePermission =
     permission:
@@ -93,6 +95,7 @@ in
 {
   agents = agentsOutput;
   skills = skillSkel;
-  agentsMd = agentsMdGenerator { inherit (config) agents; };
+  agentsMd = if workflowGuide != "" then workflowGuide else agentsMdGenerator { inherit (config) agents; };
+  agentListMd = agentsMdGenerator { inherit (config) agents; };
   opencodeJson = opencodeConfig;
 }

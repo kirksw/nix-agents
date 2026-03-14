@@ -30,9 +30,18 @@
             modules = defaultModules;
           };
 
-        opencodeConfig = mkConfig "opencode";
+        mkConfigWithSrc =
+          target:
+          library.mkAgentSystem {
+            inherit pkgs target;
+            modules = defaultModules;
+            src = ./.;
+          };
+
+        opencodeConfig = mkConfigWithSrc "opencode";
         claudeConfig = mkConfig "claude";
         codexConfig = mkConfig "codex";
+        piConfig = mkConfigWithSrc "pi";
 
         piCodingAgent = pkgs.callPackage ./packages/pi-coding-agent { };
 
@@ -88,6 +97,20 @@
             ${pkgs.coreutils}/bin/cp "${codexConfig}/AGENTS.md" "$DATA_DIR/nix-agents/codex/AGENTS.md" 2>/dev/null || true
           fi
 
+          # Pi
+          if [ -d "${piConfig}" ]; then
+            echo "Syncing Pi to $HOME/.pi/agent..."
+            sync_tree "${piConfig}/agents" "$HOME/.pi/agent/agents"
+            sync_tree "${piConfig}/skills" "$HOME/.pi/agent/skills"
+            ${pkgs.coreutils}/bin/cp "${piConfig}/AGENTS.md" "$HOME/.pi/agent/AGENTS.md" 2>/dev/null || true
+            if [ -d "${piConfig}/extensions" ]; then
+              sync_tree "${piConfig}/extensions" "$HOME/.pi/agent/extensions"
+            fi
+            if [ -d "${piConfig}/prompts" ]; then
+              sync_tree "${piConfig}/prompts" "$HOME/.pi/agent/prompts"
+            fi
+          fi
+
           echo "Done!"
         '';
       in
@@ -101,6 +124,7 @@
           opencode-config = opencodeConfig;
           claude-config = claudeConfig;
           codex-config = codexConfig;
+          pi-config = piConfig;
           opencode = library.mkWrappedTool {
             inherit pkgs;
             target = "opencode";
