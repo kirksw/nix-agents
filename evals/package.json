@@ -1,0 +1,7 @@
+{
+  "name": "nix-agents-evals",
+  "version": "1.0.0",
+  "devDependencies": {
+    "promptfoo": "0.103.5"
+  }
+}
