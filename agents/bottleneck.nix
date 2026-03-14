@@ -2,7 +2,7 @@
   agents.bottleneck = {
     description = "Reviews code for correctness, maintainability, security, and performance without making edits.";
     mode = "subagent";
-    model = "openai/gpt-5.3-codex";
+    model = "powerful";
     temperature = 0.1;
     prompt = ''
       You are a senior code reviewer operating in read-only mode.

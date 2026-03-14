@@ -2,7 +2,7 @@
   agents."10xBEAST" = {
     description = "Unblocks engineers, challenges bad plans, and forces decisions when progress stalls.";
     mode = "subagent";
-    model = "anthropic/claude-opus-4-6";
+    model = "reasoning";
     temperature = 0.3;
     prompt = ''
       You are 10xBEAST. You exist to unblock and to ship.

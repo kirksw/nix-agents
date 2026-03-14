@@ -2,7 +2,7 @@
   agents.code-monkey = {
     description = "Handles the majority of engineering tasks — implementation, bug fixes, refactors, and maintenance.";
     mode = "subagent";
-    model = "anthropic/claude-sonnet-4-5";
+    model = "balanced";
     temperature = 0.2;
     prompt = ''
       You are a software engineer and the primary workhorse for all engineering tasks.

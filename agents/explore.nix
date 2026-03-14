@@ -2,7 +2,7 @@
   agents.explore = {
     description = "Fast exploration agent for understanding codebases, finding files, and gathering context. Use for research, debugging, and initial investigation.";
     mode = "subagent";
-    model = "anthropic/claude-sonnet-4-5";
+    model = "balanced";
     temperature = 0.3;
     prompt = ''
       You are an expert at fast code exploration and research.

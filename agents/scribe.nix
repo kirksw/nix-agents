@@ -2,7 +2,7 @@
   agents.scribe = {
     description = "Updates documentation after work completes — session logs, README, ARCHITECTURE, and reference docs. Uses git commits as the changelog.";
     mode = "subagent";
-    model = "anthropic/claude-sonnet-4-5";
+    model = "fast";
     temperature = 0.2;
     prompt = ''
       You are scribe. You keep the paper trail accurate. You write after work is done, not before.

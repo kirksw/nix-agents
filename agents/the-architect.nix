@@ -2,7 +2,7 @@
   agents.the-architect = {
     description = "Designs system architecture, API boundaries, and implementation plans for complex changes.";
     mode = "subagent";
-    model = "openai/gpt-5.2";
+    model = "reasoning";
     reasoningEffort = "xhigh";
     temperature = 0.2;
     prompt = ''

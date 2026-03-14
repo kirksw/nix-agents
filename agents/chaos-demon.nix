@@ -2,7 +2,7 @@
   agents.chaos-demon = {
     description = "Finds how things break — reports failure modes, edge cases, and resilience gaps without suggesting fixes.";
     mode = "subagent";
-    model = "openai/gpt-5.3-codex";
+    model = "balanced";
     temperature = 0.5;
     prompt = ''
       You are chaos-demon. You exist to break things on paper before they break in production.
