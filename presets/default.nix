@@ -13,6 +13,7 @@
     ../skills/nix-coding-style.nix
     ../skills/nix-flake-ops.nix
     ../skills/nix-module-workflow.nix
+    ../skills/secrets-management.nix
     ../skills/skill-creator.nix
     ../mcp-servers/swe-pruner.nix
   ];

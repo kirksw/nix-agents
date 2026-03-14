@@ -1,0 +1,23 @@
+{
+  "piCodingAgentVersions": {
+    "version": "0.55.3",
+    "urls": {
+      "darwin": {
+        "arm64": {
+          "url": "https://github.com/badlogic/pi-mono/releases/download/v0.55.3/pi-darwin-arm64.tar.gz",
+          "hash": "1i6byh18zqjzpsqw02bcfsxn3w6gvvbk6lvfh3x34cch1w38yr6n"
+        },
+        "x64": {
+          "url": "https://github.com/badlogic/pi-mono/releases/download/v0.55.3/pi-darwin-x64.tar.gz",
+          "hash": "1mqdipjnmz2a5a3rl7fna9layaa9zszafbzpms3905vsp1sd3ywa"
+        }
+      },
+      "linux": {
+        "x64": {
+          "url": "https://github.com/badlogic/pi-mono/releases/download/v0.55.3/pi-linux-x64.tar.gz",
+          "hash": "0japbi5s62mx9xklyh024hmb2hd8zhsbkkh7r42d5p31xhb8i7i5"
+        }
+      }
+    }
+  }
+}
