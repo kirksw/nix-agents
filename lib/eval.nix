@@ -12,7 +12,7 @@ lib.evalModules {
   ]
   ++ modules;
   specialArgs = {
-    inherit types;
+    inherit lib types;
   }
   // specialArgs;
 }

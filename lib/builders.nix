@@ -23,9 +23,13 @@ in
       modules ? [ ],
       target ? "opencode",
       src ? null,
+      inputs ? { },
     }:
     let
-      evaluated = evalModules { inherit modules; };
+      evaluated = evalModules {
+        inherit modules;
+        specialArgs = { inherit inputs; };
+      };
       inherit (evaluated) config;
       generated = mkGenerator target { inherit lib config src; };
 
