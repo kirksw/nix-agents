@@ -188,6 +188,18 @@
             statix check ${nixFiles} 2>&1
             touch $out
           '';
+
+          schema-compat-claude =
+            pkgs.runCommand "schema-compat-claude"
+              {
+                nativeBuildInputs = [ pkgs.check-jsonschema ];
+              }
+              ''
+                check-jsonschema \
+                  --schemafile ${./lib/schemas/claude-code-settings.json} \
+                  ${claudeConfig}/settings.json
+                touch $out
+              '';
         };
       }
     )
