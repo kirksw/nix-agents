@@ -6,6 +6,14 @@
 let
   agentsMdGenerator = import ./agents-md.nix { inherit lib; };
 
+  tierModels = {
+    fast = "claude-haiku-4-5-20251001";
+    balanced = "claude-sonnet-4-6";
+    powerful = "claude-sonnet-4-6";
+    reasoning = "claude-opus-4-6";
+  };
+  resolveModel = m: tierModels.${m} or m;
+
   normalizePermission =
     permission:
     if builtins.isString permission then
@@ -80,7 +88,7 @@ let
       body = {
         inherit name;
         inherit (agent) description;
-        inherit (agent) model;
+        model = resolveModel agent.model;
         inherit (agent) mode;
         inherit (agent) delegatesTo;
         inherit (agent) temperature;

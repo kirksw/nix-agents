@@ -6,6 +6,14 @@
 let
   agentsMdGenerator = import ./agents-md.nix { inherit lib; };
 
+  tierModels = {
+    fast = "gpt-4.1-mini";
+    balanced = "gpt-4.1";
+    powerful = "gpt-4.1";
+    reasoning = "o3";
+  };
+  resolveModel = m: tierModels.${m} or m;
+
   normalizePermission =
     permission:
     if builtins.isString permission then
@@ -32,7 +40,7 @@ let
         inherit name;
         inherit (agent) description;
         inherit (agent) mode;
-        inherit (agent) model;
+        model = resolveModel agent.model;
         inherit (agent) delegatesTo;
         inherit (agent) temperature;
       };

@@ -8,6 +8,14 @@ let
 
   workflowGuide = if src != null then builtins.readFile "${src}/AGENTS.md" else "";
 
+  tierModels = {
+    fast = "anthropic/claude-haiku-4-5-20251001";
+    balanced = "anthropic/claude-sonnet-4-6";
+    powerful = "google/gemini-2.5-pro";
+    reasoning = "anthropic/claude-opus-4-6";
+  };
+  resolveModel = m: tierModels.${m} or m;
+
   normalizePermission =
     permission:
     if builtins.isString permission then
@@ -42,7 +50,7 @@ let
       lines = [
         "description: ${agent.description}"
         "mode: ${agent.mode}"
-        "model: ${agent.model}"
+        "model: ${resolveModel agent.model}"
         "temperature: ${toString agent.temperature}"
       ]
       ++ lib.optional (agent.reasoningEffort != null) "reasoningEffort: ${agent.reasoningEffort}"
