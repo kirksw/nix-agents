@@ -88,8 +88,13 @@ let
         description = "One line description for tool UIs.";
       };
       model = mkOption {
-        type = types.str;
-        description = "Agent model identifier.";
+        type = types.either (types.enum [
+          "fast"
+          "balanced"
+          "powerful"
+          "reasoning"
+        ]) types.str;
+        description = "Model capability tier or explicit model string.";
       };
       mode = mkOption {
         type = types.enum [

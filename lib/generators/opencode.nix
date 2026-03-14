@@ -1,4 +1,8 @@
-{ lib, config, src ? null }:
+{
+  lib,
+  config,
+  src ? null,
+}:
 let
   agentsMdGenerator = import ./agents-md.nix { inherit lib; };
 
@@ -95,7 +99,8 @@ in
 {
   agents = agentsOutput;
   skills = skillSkel;
-  agentsMd = if workflowGuide != "" then workflowGuide else agentsMdGenerator { inherit (config) agents; };
+  agentsMd =
+    if workflowGuide != "" then workflowGuide else agentsMdGenerator { inherit (config) agents; };
   agentListMd = agentsMdGenerator { inherit (config) agents; };
   opencodeJson = opencodeConfig;
 }

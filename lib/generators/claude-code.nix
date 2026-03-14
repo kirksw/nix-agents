@@ -1,4 +1,8 @@
-{ lib, config, src ? null }:
+{
+  lib,
+  config,
+  src ? null,
+}:
 let
   agentsMdGenerator = import ./agents-md.nix { inherit lib; };
 
