@@ -42,8 +42,10 @@
         claudeConfig = mkConfig "claude";
         codexConfig = mkConfig "codex";
         piConfig = mkConfigWithSrc "pi";
+        cursorConfig = mkConfig "cursor";
+        ampConfig = mkConfig "amp";
 
-        piCodingAgent = pkgs.callPackage ./tools/pi/package { };
+        piCodingAgent = pkgs.callPackage ./targets/pi/package { };
 
         nixFiles = pkgs.lib.fileset.toSource {
           root = ./.;
@@ -62,13 +64,8 @@
 
         benchScript = pkgs.writeShellScriptBin "bench" ''
           set -euo pipefail
-          if ! command -v promptfoo &>/dev/null; then
-            echo "promptfoo not found. Install with: npm install -g promptfoo"
-            exit 1
-          fi
-          export ANTHROPIC_API_KEY="''${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY must be set}"
-          cd ${./evals}
-          exec promptfoo eval --config promptfoo.yaml "$@"
+          echo "Evals directory has been removed. Re-add an evals/ directory to use bench." >&2
+          exit 1
         '';
 
         syncAgents = pkgs.writeShellScriptBin "sync-agents" ''
@@ -132,6 +129,25 @@
             fi
           fi
 
+          # Cursor
+          if [ -d "${cursorConfig}" ]; then
+            echo "Syncing Cursor to $HOME/.cursor..."
+            ${pkgs.coreutils}/bin/mkdir -p "$HOME/.cursor/rules"
+            if [ -d "${cursorConfig}/.cursor/rules" ]; then
+              sync_tree "${cursorConfig}/.cursor/rules" "$HOME/.cursor/rules"
+            fi
+            ${pkgs.coreutils}/bin/cp "${cursorConfig}/.cursor/mcp.json" "$HOME/.cursor/mcp.json" 2>/dev/null || true
+          fi
+
+          # Amp
+          if [ -d "${ampConfig}" ]; then
+            echo "Syncing Amp to $CONFIG_DIR/amp..."
+            sync_tree "${ampConfig}/agents" "$CONFIG_DIR/amp/agents"
+            sync_tree "${ampConfig}/skills" "$CONFIG_DIR/amp/skills"
+            ${pkgs.coreutils}/bin/cp "${ampConfig}/AGENTS.md" "$CONFIG_DIR/amp/AGENTS.md" 2>/dev/null || true
+            ${pkgs.coreutils}/bin/cp "${ampConfig}/amp.json" "$CONFIG_DIR/amp/amp.json" 2>/dev/null || true
+          fi
+
           echo "Done!"
         '';
       in
@@ -164,6 +180,8 @@
             tool = agentPkgs.codex;
             agentSystem = codexConfig;
           };
+          cursor-config = cursorConfig;
+          amp-config = ampConfig;
           pi-coding-agent = piCodingAgent;
           default = opencodeConfig;
         };
@@ -216,6 +234,8 @@
           config-gen-opencode = opencodeConfig;
           config-gen-claude = claudeConfig;
           config-gen-codex = codexConfig;
+          config-gen-cursor = cursorConfig;
+          config-gen-amp = ampConfig;
 
           format =
             pkgs.runCommand "check-format"
@@ -307,7 +327,7 @@
     )
     // {
       overlays.default = final: prev: {
-        pi-coding-agent = final.callPackage ./tools/pi/package { };
+        pi-coding-agent = final.callPackage ./targets/pi/package { };
       };
 
       templates.default = {

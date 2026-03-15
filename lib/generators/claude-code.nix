@@ -5,6 +5,8 @@
 }:
 let
   agentsMdGenerator = import ./agents-md.nix { inherit lib; };
+  shared = import ./shared.nix { inherit lib; };
+  preamble = shared.mkHumanPreamble config.human;
 
   generatorDefaults = {
     fast = "claude-haiku-4-5-20251001";
@@ -107,7 +109,7 @@ let
     "---\n${builtins.toJSON body}\n---\n";
 
   agentsOutput = lib.mapAttrs (
-    name: agent: renderFrontmatter name agent + "\n" + agent.prompt + "\n"
+    name: agent: renderFrontmatter name agent + "\n" + preamble + agent.prompt + "\n"
   ) config.agents;
 
   skillSkel = lib.mapAttrs (

@@ -211,6 +211,106 @@ let
       };
     };
   };
+
+  cognitiveStyleType = types.enum [
+    "adhd"
+    "dyslexia"
+    "detail-focused"
+    "high-level"
+    "visual"
+  ];
+
+  humanType = types.submodule {
+    options = {
+      name = mkOption {
+        type = types.str;
+        default = "";
+        description = "Human operator name.";
+      };
+      cognitiveStyle = mkOption {
+        type = types.nullOr cognitiveStyleType;
+        default = null;
+        description = "Cognitive style hint; expands to communication rules injected into all agent prompts.";
+      };
+      context = mkOption {
+        type = types.lines;
+        default = "";
+        description = "Free-form preferences injected verbatim into the preamble.";
+      };
+      rules = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = "Hard rules injected as a numbered list in the preamble.";
+      };
+    };
+  };
+
+  providerType = types.submodule {
+    options = {
+      credentialSource = mkOption {
+        type = types.enum [
+          "env"
+          "protonpass"
+          "apple-keychain"
+          "sops"
+        ];
+        description = "Where the credential lives.";
+      };
+      credentialRef = mkOption {
+        type = types.str;
+        description = "Key name, env var name, or sops path.";
+      };
+      envVar = mkOption {
+        type = types.str;
+        description = "Env var the tool expects at runtime.";
+      };
+    };
+  };
+
+  profileType = types.submodule {
+    options = {
+      pathPrefixes = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = "Filesystem path prefixes this profile activates for.";
+      };
+      providers = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = "Provider names (keys in config.providers) active in this profile.";
+      };
+      agents = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = "Agent names included. Empty means all.";
+      };
+      skills = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = "Skill names included. Empty means all.";
+      };
+      mcpServers = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = "MCP server names included. Empty means all.";
+      };
+      human = mkOption {
+        type = types.nullOr humanType;
+        default = null;
+        description = "Human context override for this profile.";
+      };
+      tierMapping = mkOption {
+        type = types.attrsOf types.str;
+        default = { };
+        description = "Profile-local tier overrides merged over system tierMapping.";
+      };
+      permissions = mkOption {
+        type = types.nullOr permissionsType;
+        default = null;
+        description = "Profile-local permission defaults.";
+      };
+    };
+  };
 in
 {
   inherit
@@ -223,8 +323,14 @@ in
     agentType
     skillType
     mcpServerType
+    cognitiveStyleType
+    humanType
+    providerType
+    profileType
     ;
   agents = types.attrsOf agentType;
   skills = types.attrsOf skillType;
   mcpServers = types.attrsOf mcpServerType;
+  providers = types.attrsOf providerType;
+  profiles = types.attrsOf profileType;
 }

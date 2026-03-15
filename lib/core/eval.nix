@@ -9,6 +9,9 @@ lib.evalModules {
     ../../modules/agent.nix
     ../../modules/skill.nix
     ../../modules/mcp-server.nix
+    ../../modules/human.nix
+    ../../modules/provider.nix
+    ../../modules/profile.nix
   ]
   ++ modules;
   specialArgs = {

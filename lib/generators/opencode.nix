@@ -5,6 +5,8 @@
 }:
 let
   agentsMdGenerator = import ./agents-md.nix { inherit lib; };
+  shared = import ./shared.nix { inherit lib; };
+  preamble = shared.mkHumanPreamble config.human;
 
   workflowGuide = if src != null then builtins.readFile "${src}/AGENTS.md" else "";
 
@@ -70,7 +72,7 @@ let
     "---\n${lib.concatStringsSep "\n" lines}\n---";
 
   agentsOutput = lib.mapAttrs (
-    name: agent: (renderFrontmatter agent) + "\n" + agent.prompt + "\n"
+    name: agent: (renderFrontmatter agent) + "\n" + preamble + agent.prompt + "\n"
   ) config.agents;
 
   skillSkel = lib.mapAttrs (

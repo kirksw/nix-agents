@@ -4,6 +4,8 @@ let
   claudeCodeGenerator = import ../generators/claude-code.nix;
   codexGenerator = import ../generators/codex.nix;
   piGenerator = import ../generators/pi.nix;
+  cursorGenerator = import ../generators/cursor.nix;
+  ampGenerator = import ../generators/amp.nix;
 
   mkGenerator =
     target:
@@ -13,8 +15,67 @@ let
       codexGenerator
     else if target == "pi" then
       piGenerator
+    else if target == "cursor" then
+      cursorGenerator
+    else if target == "amp" then
+      ampGenerator
     else
       opencodeGenerator;
+
+  # Resolve a named profile against the full config, returning a filtered/overridden config.
+  resolveProfile =
+    config: profileName:
+    let
+      profile = config.profiles.${profileName};
+
+      filterByWhitelist =
+        whitelist: attrset:
+        if whitelist == [ ] then
+          attrset
+        else
+          lib.filterAttrs (name: _: builtins.elem name whitelist) attrset;
+
+      resolvedHuman = if profile.human != null then profile.human else config.human;
+
+      resolvedTierMapping = config.tierMapping // profile.tierMapping;
+
+      resolvedDefaultPermissions =
+        if profile.permissions != null then
+          # Merge profile permissions over system defaults
+          {
+            edit =
+              if profile.permissions.edit != null then
+                profile.permissions.edit
+              else
+                config.defaultPermissions.edit;
+            bash =
+              if profile.permissions.bash != null then
+                profile.permissions.bash
+              else
+                config.defaultPermissions.bash;
+            task =
+              if profile.permissions.task != null then
+                profile.permissions.task
+              else
+                config.defaultPermissions.task;
+            webfetch =
+              if profile.permissions.webfetch != null then
+                profile.permissions.webfetch
+              else
+                config.defaultPermissions.webfetch;
+          }
+        else
+          config.defaultPermissions;
+    in
+    config
+    // {
+      agents = filterByWhitelist profile.agents config.agents;
+      skills = filterByWhitelist profile.skills config.skills;
+      mcpServers = filterByWhitelist profile.mcpServers config.mcpServers;
+      human = resolvedHuman;
+      tierMapping = resolvedTierMapping;
+      defaultPermissions = resolvedDefaultPermissions;
+    };
 in
 {
   mkAgentSystem =
@@ -24,13 +85,15 @@ in
       target ? "opencode",
       src ? null,
       inputs ? { },
+      profile ? null,
     }:
     let
       evaluated = evalModules {
         inherit modules;
         specialArgs = { inherit inputs; };
       };
-      inherit (evaluated) config;
+      rawConfig = evaluated.config;
+      config = if profile != null then resolveProfile rawConfig profile else rawConfig;
       generated = mkGenerator target { inherit lib config src; };
 
       writeAgent = name: content: ''
@@ -86,6 +149,28 @@ in
         ''}
       '';
 
+      cursorOutputs = ''
+        mkdir -p "$out/.cursor/rules"
+        ${lib.concatStringsSep "\n" (
+          lib.mapAttrsToList (name: content: ''
+            cp ${builtins.toFile "cursor-agent-${name}.mdc" content} "$out/.cursor/rules/agent-${name}.mdc"
+          '') generated.agentRules
+        )}
+        ${lib.concatStringsSep "\n" (
+          lib.mapAttrsToList (name: content: ''
+            cp ${builtins.toFile "cursor-skill-${name}.mdc" content} "$out/.cursor/rules/skill-${name}.mdc"
+          '') generated.skillRules
+        )}
+        cp ${builtins.toFile "cursor-mcp.json" generated.mcpJson} "$out/.cursor/mcp.json"
+        echo "Cursor generator is experimental. Output format may change." > "$out/EXPERIMENTAL"
+      '';
+
+      ampOutputs = ''
+        cp ${builtins.toFile "amp.json" generated.ampJson} "$out/amp.json"
+        cp ${builtins.toFile "AGENTS.md" generated.agentsMd} "$out/AGENTS.md"
+        echo "Amp generator is experimental. Output format may change." > "$out/EXPERIMENTAL"
+      '';
+
       outputScript =
         if target == "claude" then
           claudeOutputs
@@ -93,6 +178,10 @@ in
           codexOutputs
         else if target == "pi" then
           piOutputs
+        else if target == "cursor" then
+          cursorOutputs
+        else if target == "amp" then
+          ampOutputs
         else
           opencodeOutputs;
     in

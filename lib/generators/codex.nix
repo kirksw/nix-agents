@@ -7,9 +7,11 @@
 }:
 let
   agentsMdGenerator = import ./agents-md.nix { inherit lib; };
+  shared = import ./shared.nix { inherit lib; };
+  preamble = shared.mkHumanPreamble config.human;
 
   generatorDefaults = {
-    fast = "gpt-4.1-mini";
+    fast = "o4-mini";
     balanced = "gpt-4.1";
     powerful = "gpt-4.1";
     reasoning = "o3";
@@ -60,7 +62,7 @@ let
     builtins.toJSON (body // { inherit permissions; });
 
   agentsOutput = lib.mapAttrs (
-    name: agent: renderFrontmatter name agent + "\n" + agent.prompt + "\n"
+    name: agent: renderFrontmatter name agent + "\n" + preamble + agent.prompt + "\n"
   ) config.agents;
 
   skills = lib.mapAttrs (
