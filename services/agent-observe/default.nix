@@ -24,9 +24,7 @@ pkgs.buildNpmPackage {
   installPhase = ''
     runHook preInstall
     mkdir -p $out/lib/agent-observe $out/bin
-    cp -r dist $out/lib/agent-observe/
-    cp package.json $out/lib/agent-observe/
-    # Use makeWrapper / printf to avoid heredoc indentation corrupting the shebang.
+    cp -r dist node_modules package.json $out/lib/agent-observe/
     printf '%s\n' \
       '#!/usr/bin/env bash' \
       "exec ${pkgs.nodejs_22}/bin/node --experimental-sqlite $out/lib/agent-observe/dist/main.js \"\$@\"" \
