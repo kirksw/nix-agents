@@ -80,6 +80,28 @@ This scaffolds a flake that imports the default preset and lets you add agents, 
 | `nix-module-workflow` | Composable Nix module patterns |
 | `skill-creator` | Recipe for creating new skills |
 
+## Observability
+
+`agent-observe` tracks session activity, token usage, and delegation events in a local SQLite database.
+
+```bash
+# Start the HTTP service (localhost:7734)
+nix run .#observe -- serve
+
+# Query from the CLI
+nix run .#observe -- summary
+nix run .#observe -- sessions --since 2026-03-01
+nix run .#observe -- sessions --project nix-agents --limit 10
+
+# Start the MCP server (stdio, for agents to query directly)
+nix run .#observe -- mcp
+
+# Import a session JSON file written by the session-write hooks
+nix run .#observe -- ingest ~/.local/share/nix-agents/sessions/personal/nix-agents/2026-03-15T10-00-00.json
+```
+
+Session files are written automatically to `~/.local/share/nix-agents/sessions/<profile>/<project>/` when you use the session-write hooks (see `defs/hooks/session-write.nix`).
+
 ## Development
 
 ```bash
@@ -97,6 +119,13 @@ nix flake show         # List outputs
 | `config-gen-opencode` | Builds OpenCode config |
 | `config-gen-claude` | Builds Claude Code config |
 | `config-gen-codex` | Builds Codex config |
+| `config-gen-cursor` | Builds Cursor rules config |
+| `config-gen-amp` | Builds Amp config |
+| `config-gen-pi` | Builds Pi config |
+| `schema-compat-claude` | Validates Claude settings.json schema |
+| `schema-compat-opencode` | Validates OpenCode config schema |
+| `schema-compat-session` | Validates session file schema |
+| `observe-service-build` | Verifies agent-observe binary builds |
 | `format` | nixfmt formatting check |
 | `lint` | statix lint check |
 
