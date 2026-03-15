@@ -1,5 +1,4 @@
-_:
-{
+_: {
   mcpServers.agent-observe = {
     type = "local";
     # package is set at flake level where pkgs is available
