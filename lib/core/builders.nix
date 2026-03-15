@@ -106,7 +106,8 @@ in
       # Each hook command is compiled to a store-path shell script to avoid
       # multiline command embedding in the manifest and to eliminate eval on
       # arbitrary strings in the wrapper.
-      hookScripts = lib.imap0 (i: hook:
+      hookScripts = lib.imap0 (
+        i: hook:
         let
           script = pkgs.writeShellScript "nix-agents-hook-${hook.event}-${toString i}" (
             (lib.optionalString (hook.package != null) ''
@@ -115,7 +116,10 @@ in
             + hook.command
           );
         in
-        { inherit (hook) event; path = "${script}"; }
+        {
+          inherit (hook) event;
+          path = "${script}";
+        }
       ) config.hooks;
 
       hookManifest = builtins.toFile "hook-manifest" (
