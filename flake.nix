@@ -183,6 +183,7 @@
           cursor-config = cursorConfig;
           amp-config = ampConfig;
           pi-coding-agent = piCodingAgent;
+          observe-service = pkgs.callPackage ./services/agent-observe { };
           default = opencodeConfig;
         };
 
@@ -199,6 +200,10 @@
           bench = {
             type = "app";
             program = "${benchScript}/bin/bench";
+          };
+          observe = {
+            type = "app";
+            program = "${self.packages.${system}.observe-service}/bin/agent-observe";
           };
           fmt = {
             type = "app";
@@ -334,7 +339,10 @@
                 touch $out
               '';
 
-          # TODO: add observe-service package after services/agent-observe/ is implemented
+          observe-service-build = pkgs.runCommand "observe-service-build" { } ''
+            test -f ${self.packages.${system}.observe-service}/bin/agent-observe
+            touch $out
+          '';
         };
       }
     )
