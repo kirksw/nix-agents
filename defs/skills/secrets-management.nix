@@ -89,6 +89,7 @@
       - Always use `sops` for editing SOPS-managed files
       - Set appropriate file modes (0400 for secrets)
     '';
+    version = "1.0.0";
     resources = { };
     src = null;
   };

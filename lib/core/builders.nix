@@ -125,6 +125,12 @@ let
         lib.concatMapStringsSep "\n" (h: "${h.event}:${h.path}") hookScripts
       );
 
+      skillVersions = lib.mapAttrs (
+        _: skill: if skill.version != null then skill.version else "unversioned"
+      ) config.skills;
+
+      skillVersionManifest = pkgs.writeText "skill-versions.json" (builtins.toJSON skillVersions);
+
       writeAgent = name: content: ''
         cp ${builtins.toFile "agent-${name}.md" content} "$out/agents/${name}.md"
       '';
@@ -145,6 +151,7 @@ let
           lib.mapAttrsToList (name: skill: writeSkill name (skillContent name skill)) config.skills
         )}
         cp ${hookManifest} "$out/hook-manifest"
+        cp ${skillVersionManifest} "$out/skill-versions.json"
       '';
 
       opencodeOutputs = ''
@@ -197,6 +204,7 @@ let
       ampOutputs = ''
         mkdir -p "$out"
         cp ${hookManifest} "$out/hook-manifest"
+        cp ${skillVersionManifest} "$out/skill-versions.json"
         cp ${builtins.toFile "amp.json" generated.ampJson} "$out/amp.json"
         cp ${builtins.toFile "AGENTS.md" generated.agentsMd} "$out/AGENTS.md"
       '';
@@ -401,6 +409,7 @@ in
       ${profileBlock}
       ${credentialBlock}
       _NAX_HOOKS="${nixAgentsConfig}/hook-manifest"
+      export NAX_SKILL_VERSIONS="${nixAgentsConfig}/skill-versions.json"
       _run_hook() {
         local event="$1"
         local json="''${2:-{}}"

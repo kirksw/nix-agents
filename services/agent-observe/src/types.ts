@@ -9,6 +9,7 @@ export interface Session {
   durationSec: number | null;
   inputTokens: number | null;
   outputTokens: number | null;
+  skillVersions?: Record<string, string>;
 }
 
 export interface SessionEvent {
@@ -31,6 +32,7 @@ export interface IngestPayload {
   lastCommit?: string;
   durationSec?: number;
   tokenUsage?: { input: number; output: number };
+  skillVersions?: Record<string, string>;
 }
 
 export interface Summary {

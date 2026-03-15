@@ -92,6 +92,7 @@
       - Do not edit the `result` symlink produced by `nix build`.
       - `cursor` and `amp` generator output format may still evolve — check EXPERIMENTAL marker in outputs.
     '';
+    version = "1.0.0";
     resources = { };
     src = null;
   };

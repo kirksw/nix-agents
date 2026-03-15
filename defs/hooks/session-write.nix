@@ -13,11 +13,13 @@
         mkdir -p "$SESSION_DIR"
         SESSION_FILE="$SESSION_DIR/$(date -u +%Y-%m-%dT%H-%M-%S).json"
         SESSION_ID="$(uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid 2>/dev/null || echo "$(date +%s)-$$")"
+        SKILL_VERSIONS="$(cat "''${NAX_SKILL_VERSIONS:-/dev/null}" 2>/dev/null || echo '{}')"
         jq -n \
           --arg id "$SESSION_ID" \
           --arg profile "''${NAX_PROFILE:-default}" \
           --arg project "$PWD" \
           --arg ts "$(date -u +%FT%TZ)" \
+          --argjson skillVersions "$SKILL_VERSIONS" \
           '{
             version: 1,
             sessionId: $id,
@@ -29,6 +31,7 @@
             lastCommit: null,
             durationSec: null,
             tokenUsage: null,
+            skillVersions: $skillVersions,
             accomplished: [],
             incomplete: [],
             events: []

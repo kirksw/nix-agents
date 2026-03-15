@@ -173,6 +173,11 @@ let
         type = types.nullOr types.path;
         default = null;
       };
+      version = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = "Semver string identifying this skill version. Used for efficacy tracking.";
+      };
     };
   };
 
