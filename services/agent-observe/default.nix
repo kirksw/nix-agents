@@ -26,12 +26,11 @@ pkgs.buildNpmPackage {
     mkdir -p $out/lib/agent-observe $out/bin
     cp -r dist $out/lib/agent-observe/
     cp package.json $out/lib/agent-observe/
-    # Wrapper injects --experimental-sqlite so node:sqlite works at runtime.
-    # Note: $out is expanded at build time here (single-quote heredoc would prevent this).
-    cat > $out/bin/agent-observe << WRAPPER
-    #!/usr/bin/env bash
-    exec ${pkgs.nodejs_22}/bin/node --experimental-sqlite $out/lib/agent-observe/dist/main.js "\$@"
-    WRAPPER
+    # Use makeWrapper / printf to avoid heredoc indentation corrupting the shebang.
+    printf '%s\n' \
+      '#!/usr/bin/env bash' \
+      "exec ${pkgs.nodejs_22}/bin/node --experimental-sqlite $out/lib/agent-observe/dist/main.js \"\$@\"" \
+      > $out/bin/agent-observe
     chmod +x $out/bin/agent-observe
     runHook postInstall
   '';

@@ -103,8 +103,23 @@ in
           ;
       };
 
+      # Each hook command is compiled to a store-path shell script to avoid
+      # multiline command embedding in the manifest and to eliminate eval on
+      # arbitrary strings in the wrapper.
+      hookScripts = lib.imap0 (i: hook:
+        let
+          script = pkgs.writeShellScript "nix-agents-hook-${hook.event}-${toString i}" (
+            (lib.optionalString (hook.package != null) ''
+              export PATH="${hook.package}/bin:$PATH"
+            '')
+            + hook.command
+          );
+        in
+        { inherit (hook) event; path = "${script}"; }
+      ) config.hooks;
+
       hookManifest = builtins.toFile "hook-manifest" (
-        lib.concatMapStringsSep "\n" (hook: "${hook.event}:${hook.command}") config.hooks
+        lib.concatMapStringsSep "\n" (h: "${h.event}:${h.path}") hookScripts
       );
 
       writeAgent = name: content: ''
@@ -178,6 +193,8 @@ in
       '';
 
       ampOutputs = ''
+        mkdir -p "$out"
+        cp ${hookManifest} "$out/hook-manifest"
         cp ${builtins.toFile "amp.json" generated.ampJson} "$out/amp.json"
         cp ${builtins.toFile "AGENTS.md" generated.agentsMd} "$out/AGENTS.md"
         echo "Amp generator is experimental. Output format may change." > "$out/EXPERIMENTAL"
@@ -219,9 +236,9 @@ in
         local event="$1"
         local json="''${2:-{}}"
         if [ -f "$_NAX_HOOKS" ]; then
-          while IFS=: read -r ev cmd; do
+          while IFS=: read -r ev script; do
             if [ "$ev" = "$event" ]; then
-              printf '%s' "$json" | eval "$cmd" || true
+              printf '%s' "$json" | "$script" || true
             fi
           done < "$_NAX_HOOKS"
         fi

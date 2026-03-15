@@ -10,14 +10,20 @@ let
   shared = import ./shared.nix { inherit lib; };
   preamble = shared.mkHumanPreamble config.human;
 
-  renderMdc = description: body: ''
-    ---
-    description: ${lib.strings.escape [ "\n" ] description}
-    globs:
-    alwaysApply: true
-    ---
-    ${body}
-  '';
+  renderMdc =
+    description: body:
+    let
+      # Quote the description in YAML to safely handle colons, special chars.
+      escaped = lib.strings.escape [ "\"" "\\" "\n" ] description;
+    in
+    ''
+      ---
+      description: "${escaped}"
+      globs:
+      alwaysApply: true
+      ---
+      ${body}
+    '';
 
   agentRules = lib.mapAttrs (
     name: agent: renderMdc agent.description (preamble + agent.prompt)

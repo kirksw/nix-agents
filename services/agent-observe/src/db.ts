@@ -14,6 +14,7 @@ const dbPath = process.env.NAX_DB_PATH ?? join(dataDir, 'observe.db');
 export const db = new DatabaseSync(dbPath);
 
 export function initDb(): void {
+  db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;');
   db.exec(`
     CREATE TABLE IF NOT EXISTS sessions (
       id TEXT PRIMARY KEY,

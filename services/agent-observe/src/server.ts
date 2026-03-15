@@ -1,18 +1,37 @@
 import express from 'express';
+import { z } from 'zod';
 import { ingest, querySessions, querySession, querySummary } from './db.js';
-import type { IngestPayload } from './types.js';
+
+const IngestSchema = z.object({
+  sessionId: z.string().min(1),
+  event: z.string().min(1),
+  data: z.record(z.unknown()).optional(),
+  profile: z.string().optional(),
+  project: z.string().optional(),
+  startedAt: z.string().optional(),
+  endedAt: z.string().optional(),
+  branch: z.string().optional(),
+  lastCommit: z.string().optional(),
+  durationSec: z.number().optional(),
+  tokenUsage: z.object({ input: z.number(), output: z.number() }).optional(),
+});
 
 export function startServer(port: number): void {
   const app = express();
   app.use(express.json());
 
   app.post('/events', (req, res) => {
+    const parsed = IngestSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: parsed.error.issues });
+      return;
+    }
     try {
-      ingest(req.body as IngestPayload);
+      ingest(parsed.data);
       res.json({ ok: true });
     } catch (err) {
       console.error('[observe] ingest error:', err);
-      res.status(400).json({ error: String(err) });
+      res.status(500).json({ error: String(err) });
     }
   });
 
