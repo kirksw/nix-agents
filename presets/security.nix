@@ -2,7 +2,7 @@
 {
   imports = [
     ./minimal.nix
-    ../agents/bottleneck.nix
-    ../agents/code-red.nix
+    ../defs/agents/bottleneck.nix
+    ../defs/agents/code-red.nix
   ];
 }

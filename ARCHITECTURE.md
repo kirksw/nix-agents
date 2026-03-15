@@ -41,9 +41,12 @@ nix-agents/
 │   ├── skill.nix          # Declares `skills` option
 │   ├── mcp-server.nix     # Declares `mcpServers` option
 │   └── system.nix         # Graph validation (throws on invalid refs)
-├── agents/                # Built-in agent definitions (8 files)
-├── skills/                # Built-in skill definitions (5 files)
-├── mcp-servers/           # Built-in MCP server definitions
+├── defs/
+│   ├── agents/            # Built-in agent definitions (8 files)
+│   ├── skills/            # Built-in skill definitions (5 files)
+│   └── mcps/              # Built-in MCP server definitions
+├── targets/
+│   └── pi/                # Pi coding agent: extensions, prompts, package
 ├── presets/
 │   └── default.nix        # Pre-composed 8-agent team
 └── templates/

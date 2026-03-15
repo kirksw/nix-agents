@@ -1,9 +1,0 @@
-description: "Test nix-coding-style skill effectiveness"
-prompts:
-  - "Write a Nix derivation that builds a simple Go binary named 'hello'."
-providers:
-  - id: anthropic:claude-sonnet-4-6
-tests:
-  - assert:
-      - type: contains
-        value: "buildGoModule"

@@ -1,20 +1,20 @@
 { ... }:
 {
   imports = [
-    ../agents/code-monkey.nix
-    ../agents/the-architect.nix
-    ../agents/10xBEAST.nix
-    ../agents/bottleneck.nix
-    ../agents/chaos-demon.nix
-    ../agents/code-red.nix
-    ../agents/scribe.nix
-    ../agents/explore.nix
-    ../skills/swe-pruner-mcp.nix
-    ../skills/nix-coding-style.nix
-    ../skills/nix-flake-ops.nix
-    ../skills/nix-module-workflow.nix
-    ../skills/secrets-management.nix
-    ../skills/skill-creator.nix
-    ../mcp-servers/swe-pruner.nix
+    ../defs/agents/code-monkey.nix
+    ../defs/agents/the-architect.nix
+    ../defs/agents/10xBEAST.nix
+    ../defs/agents/bottleneck.nix
+    ../defs/agents/chaos-demon.nix
+    ../defs/agents/code-red.nix
+    ../defs/agents/scribe.nix
+    ../defs/agents/explore.nix
+    ../defs/skills/swe-pruner-mcp.nix
+    ../defs/skills/nix-coding-style.nix
+    ../defs/skills/nix-flake-ops.nix
+    ../defs/skills/nix-module-workflow.nix
+    ../defs/skills/secrets-management.nix
+    ../defs/skills/skill-creator.nix
+    ../defs/mcps/swe-pruner.nix
   ];
 }

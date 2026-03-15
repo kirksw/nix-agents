@@ -40,7 +40,7 @@ This scaffolds a flake that imports the default preset and lets you add agents, 
           inherit pkgs;
           modules = [
             nix-agents.presets.default
-            ./agents/my-agent.nix
+            ./defs/agents/my-agent.nix
             { agents.code-monkey.model = "anthropic/claude-opus-4-6"; }
           ];
           target = "opencode";

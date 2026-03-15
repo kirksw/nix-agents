@@ -8,13 +8,13 @@ Composable LLM agent teams as Nix derivations. Define agents, skills, MCP server
 - `lib/generators/` — Per-tool config generators (opencode, claude-code, codex, pi, mermaid, agents-md)
 - `lib/schemas/` — JSON schemas for generated config validation
 - `modules/` — NixOS-style option declarations (system, agent, skill, mcp-server)
-- `agents/` — Agent definitions (one per file, sets `agents.<name>`)
-- `skills/` — Skill definitions (one per file, sets `skills.<name>`)
-- `mcp-servers/` — MCP server definitions
+- `defs/agents/` — Agent definitions (one per file, sets `agents.<name>`)
+- `defs/skills/` — Skill definitions (one per file, sets `skills.<name>`)
+- `defs/mcps/` — MCP server definitions
+- `targets/pi/` — Pi coding agent: extensions, prompts, package
 - `presets/` — Curated module collections (default, minimal, security)
 - `templates/` — Flake templates for downstream users
 - `evals/` — promptfoo evaluation suites
-- `tools/pi/` — Pi coding agent: extensions, prompts, package
 
 ## Key Conventions
 
@@ -28,7 +28,7 @@ Composable LLM agent teams as Nix derivations. Define agents, skills, MCP server
 
 ## Testing Changes
 
-After any change to lib/, modules/, agents/, skills/, or generators/:
+After any change to lib/, modules/, defs/, targets/, or generators/:
 
 1. `nix build .#opencode-config` — verify OpenCode config generation
 2. `nix build .#claude-config` — verify Claude config generation
@@ -36,8 +36,8 @@ After any change to lib/, modules/, agents/, skills/, or generators/:
 
 ## Common Tasks
 
-- **Add an agent**: create `agents/<name>.nix`, import it from a preset
-- **Add a skill**: create `skills/<name>.nix`, import it from a preset
+- **Add an agent**: create `defs/agents/<name>.nix`, import it from a preset
+- **Add a skill**: create `defs/skills/<name>.nix`, import it from a preset
 - **Add a generator**: create `lib/generators/<target>.nix`, wire into `lib/core/builders.nix`
 - **View delegation graph**: `nix run .#graph` (outputs Mermaid)
 - **Test evals**: `nix run .#bench` (requires ANTHROPIC_API_KEY)
