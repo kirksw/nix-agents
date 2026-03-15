@@ -322,6 +322,19 @@
             test -d ${codexConfig}/agents
             touch $out
           '';
+
+          schema-compat-session =
+            pkgs.runCommand "schema-compat-session"
+              {
+                nativeBuildInputs = [ pkgs.check-jsonschema ];
+              }
+              ''
+                check-jsonschema --schemafile ${./lib/schemas/session.schema.json} \
+                  ${./lib/schemas/fixtures/session-example.json}
+                touch $out
+              '';
+
+          # TODO: add observe-service package after services/agent-observe/ is implemented
         };
       }
     )

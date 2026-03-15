@@ -2,6 +2,7 @@
   lib,
   config,
   src ? null,
+  pkgs ? null,
 }:
 let
   opencodeGenerator = import ./opencode.nix { inherit lib config; };

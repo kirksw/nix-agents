@@ -2,6 +2,7 @@
   lib,
   config,
   src ? null,
+  pkgs ? null,
 }:
 let
   agentsMdGenerator = import ./agents-md.nix { inherit lib; };
@@ -145,43 +146,90 @@ let
       }
   ) enabledServers;
 
+  # Map nix-agents hook events to Claude Code hook points.
+  # session-start, skill-invoked, error have no native Claude Code equivalent — skipped.
+  renderClaudeHooks =
+    hooks: p:
+    let
+      makeHookScript =
+        hook:
+        p.writeShellScript "nix-agents-hook-${hook.event}" (
+          (lib.optionalString (hook.package != null) ''
+            export PATH="${hook.package}/bin:$PATH"
+          '')
+          + hook.command
+        );
+
+      hooksForEvent =
+        event:
+        let
+          matching = builtins.filter (h: h.event == event) hooks;
+        in
+        if matching == [ ] then
+          [ ]
+        else
+          [
+            {
+              matcher = "";
+              hooks = map (h: {
+                type = "command";
+                command = "${makeHookScript h}";
+              }) matching;
+            }
+          ];
+    in
+    {
+      Stop = hooksForEvent "session-end";
+      SubagentStop = hooksForEvent "session-end";
+      PostToolUse = (hooksForEvent "delegation") ++ (hooksForEvent "commit");
+      Notification = hooksForEvent "human-decision";
+    };
+
+  permissionsValue =
+    lib.foldl'
+      (
+        acc: name:
+        let
+          permissions = renderPermissionArrays config.agents.${name};
+          merge = {
+            allow =
+              acc.allow
+              ++ permissions.edit.allow
+              ++ permissions.bash.allow
+              ++ permissions.task.allow
+              ++ permissions.webfetch.allow;
+            deny =
+              acc.deny
+              ++ permissions.edit.deny
+              ++ permissions.bash.deny
+              ++ permissions.task.deny
+              ++ permissions.webfetch.deny;
+            ask =
+              acc.ask
+              ++ permissions.edit.ask
+              ++ permissions.bash.ask
+              ++ permissions.task.ask
+              ++ permissions.webfetch.ask;
+          };
+        in
+        merge
+      )
+      {
+        allow = [ ];
+        deny = [ ];
+        ask = [ ];
+      }
+      (builtins.attrNames config.agents);
+
   settings = {
-    permissions =
-      lib.foldl'
-        (
-          acc: name:
-          let
-            permissions = renderPermissionArrays config.agents.${name};
-            merge = {
-              allow =
-                acc.allow
-                ++ permissions.edit.allow
-                ++ permissions.bash.allow
-                ++ permissions.task.allow
-                ++ permissions.webfetch.allow;
-              deny =
-                acc.deny
-                ++ permissions.edit.deny
-                ++ permissions.bash.deny
-                ++ permissions.task.deny
-                ++ permissions.webfetch.deny;
-              ask =
-                acc.ask
-                ++ permissions.edit.ask
-                ++ permissions.bash.ask
-                ++ permissions.task.ask
-                ++ permissions.webfetch.ask;
-            };
-          in
-          merge
-        )
-        {
-          allow = [ ];
-          deny = [ ];
-          ask = [ ];
-        }
-        (builtins.attrNames config.agents);
-  };
+    permissions = permissionsValue;
+  }
+  // (
+    if pkgs != null && config.hooks != [ ] then
+      { hooks = renderClaudeHooks config.hooks pkgs; }
+    else
+      { }
+  );
 in
 {
   agents = agentsOutput;

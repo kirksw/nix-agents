@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["version", "sessionId", "profile", "project", "startedAt"],
+  "properties": {
+    "version": { "type": "integer", "const": 1 },
+    "sessionId": { "type": "string" },
+    "profile": { "type": "string" },
+    "project": { "type": "string" },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "endedAt": { "type": ["string", "null"] },
+    "branch": { "type": ["string", "null"] },
+    "lastCommit": { "type": ["string", "null"] },
+    "durationSec": { "type": ["number", "null"] },
+    "tokenUsage": {
+      "type": ["object", "null"],
+      "properties": {
+        "input": { "type": "integer" },
+        "output": { "type": "integer" }
+      }
+    },
+    "accomplished": { "type": "array", "items": { "type": "string" } },
+    "incomplete": { "type": "array", "items": { "type": "string" } },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["t", "event"],
+        "properties": {
+          "t": { "type": "string" },
+          "event": { "type": "string" },
+          "data": {}
+        }
+      }
+    }
+  }
+}

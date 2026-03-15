@@ -4,6 +4,7 @@
   lib,
   config,
   src ? null,
+  pkgs ? null,
 }:
 let
   shared = import ./shared.nix { inherit lib; };

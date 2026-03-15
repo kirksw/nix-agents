@@ -10,6 +10,29 @@
         "ask": { "type": "array", "items": { "type": "string" } }
       },
       "additionalProperties": false
+    },
+    "hooks": {
+      "type": "object",
+      "description": "Native Claude Code hooks mapped from nix-agents hook events",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "matcher": { "type": "string" },
+            "hooks": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "type": { "type": "string", "enum": ["command"] },
+                  "command": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "additionalProperties": false

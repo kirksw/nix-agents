@@ -212,6 +212,34 @@ let
     };
   };
 
+  eventType = types.enum [
+    "session-start"
+    "session-end"
+    "delegation"
+    "skill-invoked"
+    "human-decision"
+    "commit"
+    "error"
+  ];
+
+  hookType = types.submodule {
+    options = {
+      event = mkOption {
+        type = eventType;
+        description = "Event that triggers this hook.";
+      };
+      command = mkOption {
+        type = types.str;
+        description = "Shell command to run. Receives event JSON on stdin.";
+      };
+      package = mkOption {
+        type = types.nullOr types.package;
+        default = null;
+        description = "Nix package to add to PATH when running this hook.";
+      };
+    };
+  };
+
   cognitiveStyleType = types.enum [
     "adhd"
     "dyslexia"
@@ -323,6 +351,8 @@ in
     agentType
     skillType
     mcpServerType
+    eventType
+    hookType
     cognitiveStyleType
     humanType
     providerType
@@ -331,6 +361,7 @@ in
   agents = types.attrsOf agentType;
   skills = types.attrsOf skillType;
   mcpServers = types.attrsOf mcpServerType;
+  hooks = types.listOf hookType;
   providers = types.attrsOf providerType;
   profiles = types.attrsOf profileType;
 }

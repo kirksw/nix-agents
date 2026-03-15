@@ -12,6 +12,7 @@ lib.evalModules {
     ../../modules/human.nix
     ../../modules/provider.nix
     ../../modules/profile.nix
+    ../../modules/hook.nix
   ]
   ++ modules;
   specialArgs = {

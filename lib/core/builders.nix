@@ -94,7 +94,18 @@ in
       };
       rawConfig = evaluated.config;
       config = if profile != null then resolveProfile rawConfig profile else rawConfig;
-      generated = mkGenerator target { inherit lib config src; };
+      generated = mkGenerator target {
+        inherit
+          lib
+          config
+          pkgs
+          src
+          ;
+      };
+
+      hookManifest = builtins.toFile "hook-manifest" (
+        lib.concatMapStringsSep "\n" (hook: "${hook.event}:${hook.command}") config.hooks
+      );
 
       writeAgent = name: content: ''
         cp ${builtins.toFile "agent-${name}.md" content} "$out/agents/${name}.md"
@@ -115,6 +126,7 @@ in
         ${lib.concatStringsSep "\n" (
           lib.mapAttrsToList (name: skill: writeSkill name (skillContent name skill)) config.skills
         )}
+        cp ${hookManifest} "$out/hook-manifest"
       '';
 
       opencodeOutputs = ''
@@ -202,6 +214,21 @@ in
       binName = target;
     in
     pkgs.writeShellScriptBin binName ''
+      _NAX_HOOKS="${agentSystem}/hook-manifest"
+      _run_hook() {
+        local event="$1"
+        local json="''${2:-{}}"
+        if [ -f "$_NAX_HOOKS" ]; then
+          while IFS=: read -r ev cmd; do
+            if [ "$ev" = "$event" ]; then
+              printf '%s' "$json" | eval "$cmd" || true
+            fi
+          done < "$_NAX_HOOKS"
+        fi
+      }
+      trap '_run_hook session-end "{}"' EXIT
+      _run_hook session-start "{}"
+
       if [ "${target}" = "opencode" ]; then
         export OPENCODE_CONFIG="${agentSystem}/opencode.json"
         export OPENCODE_CONFIG_DIR="${agentSystem}"

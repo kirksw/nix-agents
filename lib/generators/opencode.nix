@@ -2,6 +2,7 @@
   lib,
   config,
   src ? null,
+  pkgs ? null,
 }:
 let
   agentsMdGenerator = import ./agents-md.nix { inherit lib; };
