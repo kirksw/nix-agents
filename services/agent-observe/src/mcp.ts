@@ -65,7 +65,7 @@ export async function startMcp(): Promise<void> {
     }
     if (req.params.name === 'observe_session') {
       const result = querySession(args.id as string);
-      if (\!result) {
+      if (!result) {
         return { content: [{ type: 'text', text: `Session not found: ${args.id as string}` }], isError: true };
       }
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };

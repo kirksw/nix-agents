@@ -5,7 +5,7 @@ import type { Session, SessionEvent, IngestPayload, Summary } from './types.js';
 
 const dataDir = process.env.XDG_DATA_HOME
   ? join(process.env.XDG_DATA_HOME, 'nix-agents')
-  : join(process.env.HOME\!, '.local', 'share', 'nix-agents');
+  : join(process.env.HOME!, '.local', 'share', 'nix-agents');
 
 mkdirSync(dataDir, { recursive: true });
 
@@ -173,7 +173,7 @@ export function recomputeEfficacy(): void {
         continue;
       }
       const toAgent = data['to_agent'] as string | undefined;
-      if (\!toAgent) continue;
+      if (!toAgent) continue;
       const key = toAgent + '\x00' + row.profile;
       const existing = agentUsage.get(key) ?? { delegated_n: 0 };
       existing.delegated_n++;
@@ -225,7 +225,7 @@ export function querySessions(opts: {
 
 export function querySession(id: string): { session: Session; events: SessionEvent[] } | null {
   const session = db.prepare('SELECT * FROM sessions WHERE id = ?').get(id) as Record<string, unknown> | undefined;
-  if (\!session) return null;
+  if (!session) return null;
   const events = db.prepare('SELECT * FROM events WHERE session_id = ? ORDER BY occurred_at').all(id) as Record<string, unknown>[];
   return { session: rowToSession(session), events: events.map(rowToEvent) };
 }

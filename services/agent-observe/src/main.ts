@@ -46,7 +46,7 @@ switch (command) {
   }
   case 'ingest': {
     const file = args[0];
-    if (\!file) { console.error('Usage: agent-observe ingest <session.json>'); process.exit(1); }
+    if (!file) { console.error('Usage: agent-observe ingest <session.json>'); process.exit(1); }
     const session = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
     ingest({ sessionId: session.sessionId as string, event: 'session-start', profile: session.profile as string, project: session.project as string, startedAt: session.startedAt as string, skillVersions: session.skillVersions as Record<string, string> | undefined });
     if (session.endedAt) {
