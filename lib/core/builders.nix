@@ -410,6 +410,7 @@ in
       ${credentialBlock}
       _NAX_HOOKS="${nixAgentsConfig}/hook-manifest"
       export NAX_SKILL_VERSIONS="${nixAgentsConfig}/skill-versions.json"
+      export NAX_WRAPPER_PID=$$
       _run_hook() {
         local event="$1"
         local json="''${2:-{}}"

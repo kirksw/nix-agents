@@ -61,8 +61,9 @@ export function initDb(): void {
   // Migrate: add skill_versions column if it doesn't exist yet
   try {
     db.exec('ALTER TABLE sessions ADD COLUMN skill_versions TEXT');
-  } catch {
-    // Column already exists — ignore
+  } catch (err) {
+    // Only suppress "duplicate column" — rethrow anything else
+    if (!(err instanceof Error) || !err.message.includes('duplicate column')) throw err;
   }
 }
 

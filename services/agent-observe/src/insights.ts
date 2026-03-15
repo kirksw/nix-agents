@@ -36,8 +36,16 @@ export function queryInsights(db: DatabaseSync, opts: InsightsOptions = {}): Ins
     const qualified = rows.filter(r => r.sessions_n >= minSessions);
     if (qualified.length < 2) continue;
 
-    // Sort versions lexicographically
-    qualified.sort((a, b) => (a.skill_version ?? '').localeCompare(b.skill_version ?? ''));
+    // Sort versions numerically (semver-aware: compare each dot-separated segment as integer)
+    qualified.sort((a, b) => {
+      const aParts = (a.skill_version ?? '0').split('.').map(Number);
+      const bParts = (b.skill_version ?? '0').split('.').map(Number);
+      for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+        const diff = (aParts[i] ?? 0) - (bParts[i] ?? 0);
+        if (diff !== 0) return diff;
+      }
+      return 0;
+    });
     const prev = qualified[qualified.length - 2];
     const latest = qualified[qualified.length - 1];
 
