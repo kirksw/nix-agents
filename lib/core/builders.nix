@@ -252,7 +252,54 @@ let
         profile = name;
       };
       inherit (profile) pathPrefixes;
+      # Resolve provider names to full provider objects so mkWrappedTool
+      # can generate credential-resolution shell code at build time.
+      providers = map (pname: evaluated.config.providers.${pname}) profile.providers;
     }) evaluated.config.profiles;
+
+  # Generate a shell snippet that resolves one provider's credential and
+  # exports it as the tool's expected env var. Failures are silent so the
+  # wrapper never hard-errors when a credential backend is unavailable.
+  #
+  # For "sops" the credentialRef must use the format "<file>:<key>" where
+  # <file> is the path to the sops-encrypted file and <key> is the attribute
+  # name to extract.
+  mkCredentialSnippet =
+    provider:
+    let
+      src = provider.credentialSource;
+      ref = provider.credentialRef;
+      envVar = provider.envVar;
+    in
+    if src == "env" then
+      # ref is the name of the env var to read from; re-export under envVar.
+      ''
+        _nax_cred="''${${ref}:-}"
+        [ -n "$_nax_cred" ] && export ${envVar}="$_nax_cred"
+      ''
+    else if src == "protonpass" then
+      ''
+        _nax_cred=$(protonpass-cli item get "${ref}" --fields password 2>/dev/null) || true
+        [ -n "$_nax_cred" ] && export ${envVar}="$_nax_cred"
+      ''
+    else if src == "apple-keychain" then
+      ''
+        _nax_cred=$(security find-generic-password -a "$(id -un)" -s "${ref}" -w 2>/dev/null) || true
+        [ -n "$_nax_cred" ] && export ${envVar}="$_nax_cred"
+      ''
+    else
+      # sops: split "file:key" at the first colon
+      let
+        colonIdx = lib.findFirst (i: builtins.substring i 1 ref == ":") null (
+          lib.range 0 (builtins.stringLength ref - 1)
+        );
+        sopsFile = if colonIdx != null then builtins.substring 0 colonIdx ref else ref;
+        sopsKey = if colonIdx != null then builtins.substring (colonIdx + 1) (-1) ref else "";
+      in
+      ''
+        _nax_cred=$(sops --decrypt --extract "[\"${sopsKey}\"]" "${sopsFile}" 2>/dev/null) || true
+        [ -n "$_nax_cred" ] && export ${envVar}="$_nax_cred"
+      '';
 
 in
 {
@@ -264,9 +311,10 @@ in
       target,
       tool,
       agentSystem,
-      # Optional: attrset of profileName -> { storePath: path; pathPrefixes: listOf str; }
+      # Optional: attrset of profileName -> { storePath: path; pathPrefixes: listOf str; providers: list; }
       # Built with mkProfileMeta. When non-empty the wrapper selects a profile at
-      # runtime based on $PWD or a .nix-agents-profile override file.
+      # runtime based on $PWD or a .nix-agents-profile override file, and resolves
+      # credentials for that profile before exec-ing the tool.
       profileMeta ? { },
     }:
     let
@@ -325,12 +373,33 @@ in
         esac
       '';
 
+      # Generate per-profile credential resolution as a case statement.
+      # Emitted after profile selection so _NAX_PROFILE is already set.
+      credentialBlock =
+        let
+          mkProfileCredArm =
+            name: meta:
+            let
+              snippets = lib.concatStrings (map mkCredentialSnippet meta.providers);
+            in
+            lib.optionalString (snippets != "") ''
+                ${name})
+              ${snippets}    ;;
+            '';
+          arms = lib.concatStrings (lib.mapAttrsToList mkProfileCredArm profileMeta);
+        in
+        lib.optionalString (hasProfiles && arms != "") ''
+          case "''${_NAX_PROFILE:-}" in
+          ${arms}  esac
+        '';
+
       # The config store path used throughout the rest of the wrapper.
       # Statically embedded when there are no profiles, runtime variable when there are.
       nixAgentsConfig = if hasProfiles then "$_NAX_CONFIG" else "${agentSystem}";
     in
     pkgs.writeShellScriptBin binName ''
       ${profileBlock}
+      ${credentialBlock}
       _NAX_HOOKS="${nixAgentsConfig}/hook-manifest"
       _run_hook() {
         local event="$1"
