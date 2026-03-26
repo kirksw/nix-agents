@@ -52,6 +52,10 @@ let
         model = resolveModel agent.model;
         inherit (agent) delegatesTo;
         inherit (agent) temperature;
+      }
+      # reasoningEffort is meaningful for o3 and o4-mini; omit when null.
+      // lib.optionalAttrs (agent.reasoningEffort != null) {
+        inherit (agent) reasoningEffort;
       };
       permissions = {
         edit = permissionSummary (resolvePermField "edit" agent.permissions.edit);
@@ -95,6 +99,9 @@ let
       {
         type = "local";
         command = resolveCommand name server;
+      }
+      // lib.optionalAttrs (server.environment != { }) {
+        inherit (server) environment;
       }
   ) enabledServers;
 
