@@ -6,5 +6,5 @@ let
 in
 {
   inherit types evalModules;
-  inherit (builders) mkAgentSystem mkWrappedTool;
+  inherit (builders) mkAgentSystem mkProfileMeta mkWrappedTool;
 }

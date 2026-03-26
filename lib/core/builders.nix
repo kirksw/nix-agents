@@ -223,19 +223,194 @@ in
       ${outputScript}
     '';
 
+  # Build profile metadata for use with mkWrappedTool.
+  # Returns an attrset of profileName -> { storePath, pathPrefixes } for all
+  # profiles defined in the evaluated modules.
+  mkProfileMeta =
+    {
+      pkgs,
+      modules,
+      target,
+      src ? null,
+      inputs ? { },
+    }:
+    let
+      evaluated = evalModules {
+        inherit modules;
+        specialArgs = { inherit inputs; };
+      };
+      mkAgentSystemLocal =
+        profileName:
+        let
+          config = resolveProfile evaluated.config profileName;
+          generated = mkGenerator target {
+            inherit lib config pkgs src;
+          };
+          # Simplified build reusing the same logic as mkAgentSystem but inline
+          # to avoid a circular reference (mkAgentSystem is defined in the same let).
+          # We evaluate the modules fresh per profile using the already-evaluated config.
+          hookScripts = lib.imap0 (
+            i: hook:
+            let
+              script = pkgs.writeShellScript "nix-agents-hook-${hook.event}-${toString i}" (
+                (lib.optionalString (hook.package != null) ''
+                  export PATH="${hook.package}/bin:$PATH"
+                '')
+                + hook.command
+              );
+            in
+            {
+              inherit (hook) event;
+              path = "${script}";
+            }
+          ) config.hooks;
+          hookManifest = builtins.toFile "hook-manifest-${profileName}" (
+            lib.concatMapStringsSep "\n" (h: "${h.event}:${h.path}") hookScripts
+          );
+          writeAgent = name: content: ''
+            cp ${builtins.toFile "agent-${profileName}-${name}.md" content} "$out/agents/${name}.md"
+          '';
+          skillContent =
+            name: skill:
+            if skill.src != null then builtins.readFile (skill.src + "/SKILL.md") else skill.content;
+          writeSkill = name: content: ''
+            mkdir -p "$out/skills/${name}"
+            cp ${builtins.toFile "skill-${profileName}-${name}.md" content} "$out/skills/${name}/SKILL.md"
+          '';
+          commonOutputs = ''
+            mkdir -p "$out/agents" "$out/skills"
+            ${lib.concatStringsSep "\n" (lib.mapAttrsToList writeAgent generated.agents)}
+            ${lib.concatStringsSep "\n" (
+              lib.mapAttrsToList (name: skill: writeSkill name (skillContent name skill)) config.skills
+            )}
+            cp ${hookManifest} "$out/hook-manifest"
+          '';
+          outputScript =
+            if target == "claude" then
+              ''
+                ${commonOutputs}
+                cp ${builtins.toFile "settings-${profileName}.json" generated.settingsJson} "$out/settings.json"
+                cp ${builtins.toFile "CLAUDE-${profileName}.md" generated.claudeMd} "$out/CLAUDE.md"
+                cp ${builtins.toFile "mcp-${profileName}.json" generated.mcpJson} "$out/.mcp.json"
+              ''
+            else if target == "codex" then
+              ''
+                ${commonOutputs}
+                cp ${builtins.toFile "AGENTS-${profileName}.md" generated.agentsMd} "$out/AGENTS.md"
+              ''
+            else if target == "cursor" then
+              ''
+                mkdir -p "$out/.cursor/rules"
+                ${lib.concatStringsSep "\n" (
+                  lib.mapAttrsToList (name: content: ''
+                    cp ${builtins.toFile "cursor-agent-${profileName}-${name}.mdc" content} "$out/.cursor/rules/agent-${name}.mdc"
+                  '') generated.agentRules
+                )}
+                ${lib.concatStringsSep "\n" (
+                  lib.mapAttrsToList (name: content: ''
+                    cp ${builtins.toFile "cursor-skill-${profileName}-${name}.mdc" content} "$out/.cursor/rules/skill-${name}.mdc"
+                  '') generated.skillRules
+                )}
+                cp ${builtins.toFile "cursor-mcp-${profileName}.json" generated.mcpJson} "$out/.cursor/mcp.json"
+              ''
+            else if target == "amp" then
+              ''
+                mkdir -p "$out"
+                cp ${hookManifest} "$out/hook-manifest"
+                cp ${builtins.toFile "amp-${profileName}.json" generated.ampJson} "$out/amp.json"
+                cp ${builtins.toFile "AGENTS-${profileName}.md" generated.agentsMd} "$out/AGENTS.md"
+              ''
+            else
+              ''
+                ${commonOutputs}
+                cp ${builtins.toFile "opencode-${profileName}.json" generated.opencodeJson} "$out/opencode.json"
+                cp ${builtins.toFile "AGENTS-${profileName}.md" generated.agentsMd} "$out/AGENTS.md"
+              '';
+        in
+        pkgs.runCommand "nix-agents-${target}-${profileName}-config" { } ''
+          mkdir -p "$out"
+          ${outputScript}
+        '';
+    in
+    lib.mapAttrs (name: profile: {
+      storePath = mkAgentSystemLocal name;
+      inherit (profile) pathPrefixes;
+    }) evaluated.config.profiles;
+
   mkWrappedTool =
     {
       pkgs,
       target,
       tool,
       agentSystem,
+      # Optional: attrset of profileName -> { storePath: path; pathPrefixes: listOf str; }
+      # Built with mkProfileMeta. When non-empty the wrapper selects a profile at
+      # runtime based on $PWD or a .nix-agents-profile override file.
+      profileMeta ? { },
     }:
     let
       toolBin = if target == "claude" then "${tool}/bin/claude" else "${tool}/bin/${target}";
       binName = target;
+
+      hasProfiles = profileMeta != { };
+
+      # Sort all (profile, prefix) pairs by descending prefix length so that
+      # the longest (most-specific) prefix matches first in the shell case.
+      allPrefixes = lib.concatMap (
+        name:
+        map (prefix: { inherit name prefix; }) profileMeta.${name}.pathPrefixes
+      ) (builtins.attrNames profileMeta);
+
+      sortedPrefixes = lib.sort (
+        a: b: builtins.stringLength a.prefix > builtins.stringLength b.prefix
+      ) allPrefixes;
+
+      # Expand ~ to literal $HOME so shell case patterns match correctly.
+      expandPrefix =
+        prefix: if lib.hasPrefix "~/" prefix then "$HOME/${lib.removePrefix "~/" prefix}" else prefix;
+
+      # case arms: path prefix -> profile name
+      prefixCaseArms = lib.concatStringsSep "\n" (
+        map ({ name, prefix }: "          ${expandPrefix prefix}*) _NAX_PROFILE=${name} ;;") sortedPrefixes
+      );
+
+      # case arms: profile name -> store path
+      profilePathCaseArms = lib.concatStringsSep "\n" (
+        lib.mapAttrsToList (
+          name: meta: "          ${name}) _NAX_CONFIG=${meta.storePath} ;;"
+        ) profileMeta
+      );
+
+      # Emitted at the top of the wrapper when profiles are configured.
+      # Sets _NAX_CONFIG to the appropriate store path based on $PWD.
+      profileBlock = lib.optionalString hasProfiles ''
+        _NAX_PROFILE=""
+        _d="$PWD"
+        while [ "$_d" != "/" ] && [ -n "$_d" ]; do
+          if [ -f "$_d/.nix-agents-profile" ]; then
+            _NAX_PROFILE=$(cat "$_d/.nix-agents-profile")
+            break
+          fi
+          _d="''${_d%/*}"
+        done
+        if [ -z "$_NAX_PROFILE" ]; then
+          case "$PWD" in
+        ${prefixCaseArms}
+          esac
+        fi
+        case "''${_NAX_PROFILE:-}" in
+        ${profilePathCaseArms}
+          *) _NAX_CONFIG="${agentSystem}" ;;
+        esac
+      '';
+
+      # The config store path used throughout the rest of the wrapper.
+      # Statically embedded when there are no profiles, runtime variable when there are.
+      nixAgentsConfig = if hasProfiles then "$_NAX_CONFIG" else "${agentSystem}";
     in
     pkgs.writeShellScriptBin binName ''
-      _NAX_HOOKS="${agentSystem}/hook-manifest"
+      ${profileBlock}
+      _NAX_HOOKS="${nixAgentsConfig}/hook-manifest"
       _run_hook() {
         local event="$1"
         local json="''${2:-{}}"
@@ -251,29 +426,29 @@ in
       _run_hook session-start "{}"
 
       if [ "${target}" = "opencode" ]; then
-        export OPENCODE_CONFIG="${agentSystem}/opencode.json"
-        export OPENCODE_CONFIG_DIR="${agentSystem}"
+        export OPENCODE_CONFIG="${nixAgentsConfig}/opencode.json"
+        export OPENCODE_CONFIG_DIR="${nixAgentsConfig}"
         export OPENCODE_CONFIG_CONTENT='{"autoupdate":false}'
       fi
 
       if [ "${target}" = "claude" ]; then
         _nix_agents_dir="''${XDG_DATA_HOME:-$HOME/.local/share}/nix-agents/claude"
         mkdir -p "$_nix_agents_dir"
-        ln -sfn "${agentSystem}/agents" "$_nix_agents_dir/agents"
-        ln -sfn "${agentSystem}/skills" "$_nix_agents_dir/skills"
-        [ -f "${agentSystem}/CLAUDE.md" ] && ln -sfn "${agentSystem}/CLAUDE.md" "$_nix_agents_dir/CLAUDE.md"
+        ln -sfn "${nixAgentsConfig}/agents" "$_nix_agents_dir/agents"
+        ln -sfn "${nixAgentsConfig}/skills" "$_nix_agents_dir/skills"
+        [ -f "${nixAgentsConfig}/CLAUDE.md" ] && ln -sfn "${nixAgentsConfig}/CLAUDE.md" "$_nix_agents_dir/CLAUDE.md"
         export CLAUDE_CONFIG_DIR="$_nix_agents_dir"
-        set -- --settings "${agentSystem}/settings.json" "$@"
-        [ -f "${agentSystem}/.mcp.json" ] && set -- --mcp-config "${agentSystem}/.mcp.json" "$@"
+        set -- --settings "${nixAgentsConfig}/settings.json" "$@"
+        [ -f "${nixAgentsConfig}/.mcp.json" ] && set -- --mcp-config "${nixAgentsConfig}/.mcp.json" "$@"
         exec "${toolBin}" "$@"
       fi
 
       if [ "${target}" = "codex" ]; then
         _nix_agents_dir="''${XDG_DATA_HOME:-$HOME/.local/share}/nix-agents/codex"
         mkdir -p "$_nix_agents_dir"
-        ln -sfn "${agentSystem}/agents" "$_nix_agents_dir/agents"
-        ln -sfn "${agentSystem}/skills" "$_nix_agents_dir/skills"
-        [ -f "${agentSystem}/AGENTS.md" ] && ln -sfn "${agentSystem}/AGENTS.md" "$_nix_agents_dir/AGENTS.md"
+        ln -sfn "${nixAgentsConfig}/agents" "$_nix_agents_dir/agents"
+        ln -sfn "${nixAgentsConfig}/skills" "$_nix_agents_dir/skills"
+        [ -f "${nixAgentsConfig}/AGENTS.md" ] && ln -sfn "${nixAgentsConfig}/AGENTS.md" "$_nix_agents_dir/AGENTS.md"
         export CODEX_CONFIG_DIR="$_nix_agents_dir"
         exec "${toolBin}" "$@"
       fi
