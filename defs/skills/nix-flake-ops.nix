@@ -1,35 +1,96 @@
 {
   skills.nix-flake-ops = {
-    description = "Build, check, switch, rollback, and update this nixfiles-v2 flake on macOS and NixOS. Use when users ask to validate or apply system configuration changes.";
+    description = "Build, validate, and sync nix-agents configurations. Use when running checks, building configs for a target tool, syncing to local config dirs, or operating the flake development workflow.";
     content = ''
-      # Nix Flake Operations
+      # Nix-Agents Flake Operations
 
-      Use this skill for operational workflows in this repository.
+      ## Supported Targets
 
-      ## Repo-Specific Commands
+      | Target   | Package           | Wrapped binary |
+      |----------|-------------------|----------------|
+      | opencode | `opencode-config` | `opencode`     |
+      | claude   | `claude-config`   | `claude`       |
+      | codex    | `codex-config`    | `codex`        |
+      | cursor   | `cursor-config`   | —              |
+      | amp      | `amp-config`      | —              |
+      | pi       | `pi-config`       | —              |
 
-      - macOS build only: `apps/aarch64-darwin/build`
-      - macOS apply: `apps/aarch64-darwin/switch`
-      - macOS rollback: `apps/aarch64-darwin/rollback`
-      - NixOS apply: `apps/x86_64-linux/switch <hostname>`
-      - Global checks: `nix flake check`
-      - Update lockfile: `nix flake update [input]`
-      - Update custom packages: `nix run .#update-packages`
+      ## Common Commands
 
-      ## Workflow
+      ```bash
+      # Build a config derivation
+      nix build .#opencode-config
+      nix build .#claude-config
 
-      1. Run `nix flake check` for baseline validation.
-      2. Build the target system before switching.
-      3. Switch/apply only after build success.
-      4. If change impacts versions, update with `nix flake update` and re-check.
-      5. For package updates under `packages/*`, run `nix run .#update-packages`.
+      # Run a wrapped tool directly (uses built configs)
+      nix run .#opencode
+      nix run .#claude
+      nix run .#codex
+
+      # Sync all configs to local tool config dirs
+      nix run .#sync
+
+      # Print the agent delegation graph (Mermaid)
+      nix run .#graph
+
+      # Run all checks
+      nix flake check
+
+      # Format all .nix files
+      nix run .#fmt
+
+      # Lint (statix + deadnix)
+      nix run .#lint
+
+      # Run structural eval suite
+      nix run .#bench
+
+      # Dev shell (nixfmt-rfc-style, statix, deadnix)
+      nix develop
+      ```
+
+      ## Check Suite
+
+      `nix flake check` runs:
+      - `config-gen-*` — builds each target config derivation
+      - `schema-compat-*` — validates generated JSON against schemas
+      - `wrapper-smoke-*` — checks wrapper shell syntax and key files
+      - `eval-*` — structural correctness assertions
+      - `format` — nixfmt-rfc-style check
+      - `lint` — statix lint check
+
+      ## Workflow: After Any Change
+
+      After modifying `lib/`, `modules/`, `defs/`, `targets/`, or `lib/generators/`:
+
+      1. `nix build .#opencode-config` — verify OpenCode config generation
+      2. `nix build .#claude-config` — verify Claude config generation
+      3. `nix flake check` — run all checks
+
+      ## Using nix-agents in Your Own Flake
+
+      ```nix
+      inputs.nix-agents.url = "github:kirksw/nix-agents";
+
+      # in outputs:
+      packages.my-config = nix-agents.lib.${system}.mkAgentSystem {
+        inherit pkgs;
+        modules = [ nix-agents.presets.default ./my-agent.nix ];
+        target = "opencode";
+      };
+      ```
+
+      ## Initialise from Template
+
+      ```bash
+      nix flake init -t github:kirksw/nix-agents
+      ```
 
       ## Guardrails
 
-      - Prefer `build` before `switch`.
-      - Do not edit generated symlink `result`.
-      - Keep changes host-aware (`lunar`, `nixos-ry6a`).
-      - If command wrappers are missing for a target platform, use direct `nixos-rebuild`/`darwin-rebuild` with `--flake`.
+      - Run `nix flake check` before committing.
+      - Do not edit the `result` symlink produced by `nix build`.
+      - `cursor` and `amp` generator output format may still evolve — check EXPERIMENTAL marker in outputs.
     '';
     resources = { };
     src = null;

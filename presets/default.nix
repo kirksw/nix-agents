@@ -17,6 +17,7 @@
     ../defs/skills/skill-creator.nix
     ../defs/skills/session-resume.nix
     ../defs/mcps/swe-pruner.nix
+    ../defs/mcps/agent-observe.nix
     # NOTE: session-write hooks require pkgs and must be wired in flake.nix:
     #   modules = defaultModules ++ [ (import ./defs/hooks/session-write.nix { inherit pkgs; }) ];
   ];

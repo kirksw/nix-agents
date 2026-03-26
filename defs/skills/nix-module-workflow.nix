@@ -1,41 +1,126 @@
 {
   skills.nix-module-workflow = {
-    description = "Add or modify nix modules in nixfiles-v2, wire them into hosts, and validate safely. Use when users ask to add programs, services, overlays, or host configuration.";
+    description = "Add or modify agents, skills, MCP servers, hooks, and presets in nix-agents. Use when implementing new definitions, wiring them into the build, or understanding the module system layout.";
     content = ''
-      # Nix Module Workflow
+      # Nix-Agents Module Workflow
 
-      Use this skill when implementing configuration changes in `modules/`, `hosts/`, `packages/`, or `overlays/`.
+      ## Repository Layout
 
-      ## Where to Change What
+      | Directory          | What goes here                           |
+      |--------------------|------------------------------------------|
+      | `defs/agents/`     | Agent definitions (`agents.<name> = …`)  |
+      | `defs/skills/`     | Skill definitions (`skills.<name> = …`)  |
+      | `defs/mcps/`       | MCP server defs (`mcpServers.<name> = …`)|
+      | `defs/hooks/`      | Hook definitions (take `{ pkgs }:`)      |
+      | `presets/`         | Curated import bundles                   |
+      | `modules/`         | Option declarations (NixOS module style) |
+      | `lib/generators/`  | Per-tool config generators               |
+      | `lib/schemas/`     | JSON schemas for generated outputs       |
 
-      - User program/service config: `modules/home/programs/*.nix`, `modules/home/services/*.nix`
-      - macOS-specific behavior: `modules/darwin/*`
-      - Linux-specific behavior: `modules/nixos/*`
-      - Host wiring: `hosts/darwin/work/*.nix`, `hosts/nixos/*`
-      - Shared defaults/helpers: `modules/shared/*`, `lib/*`
+      ## Skill Type Shape
 
-      ## Module Pattern
+      ```nix
+      # defs/skills/my-skill.nix
+      {
+        skills.my-skill = {
+          description = "One line — used as trigger description and shown in skill listings.";
+          content = ''
+            # My Skill
 
-      Follow `modules/*/template.nix` style:
+            Markdown body loaded when the skill triggers.
+          '';
+          resources = { };   # attrset of name -> path for bundled files
+          src = null;        # set to a path to use a pre-built SKILL.md directory
+        };
+      }
+      ```
 
-      1. Define `options.<path>.enable = lib.mkEnableOption ...`
-      2. Gate config with `lib.mkIf config.<path>.enable { ... }`
-      3. Keep modules focused and composable.
+      ## Agent Type Shape (key fields)
 
-      ## Change Procedure
+      ```nix
+      # defs/agents/my-agent.nix
+      {
+        agents.my-agent = {
+          description = "…";
+          model = "balanced";       # fast | balanced | powerful | reasoning | literal string
+          mode = "subagent";        # subagent | primary
+          temperature = 0.2;
+          prompt = ''…'';
+          delegatesTo = [ "other-agent" ];
+          skills = [ "skill-name" ];
+          mcpServers = [ "server-name" ];
+          permissions = {
+            edit = "allow";         # allow | deny | { default = …; rules = { "*.md" = "allow"; }; }
+            bash = "deny";
+            task = { default = "deny"; rules = { "other-agent" = "allow"; }; };
+            webfetch = "allow";
+          };
+        };
+      }
+      ```
 
-      1. Prefer editing an existing module before creating a new one.
-      2. Add or update options and implementation.
-      3. Enable module in the target host/home config.
-      4. Validate with `nix flake check` and relevant build command.
-      5. Apply with `switch` only after successful build.
+      ## MCP Server Type Shape
 
-      ## Naming and Layout
+      ```nix
+      # defs/mcps/my-server.nix
+      {
+        mcpServers.my-server = {
+          type = "local";          # local | remote
+          command = [ "my-bin" "mcp" ];
+          package = null;          # set to a Nix package derivation if command needs it
+          url = null;              # for remote type
+          environment = { };       # env vars passed to the server process
+        };
+      }
+      ```
 
-      - Use feature-based filenames: `modules/home/programs/<tool>.nix`
-      - Keep host names explicit (`lunar`, `nixos-ry6a`)
-      - Put custom packages in `packages/<name>/default.nix`
-      - Put overlays in `overlays/<name>/default.nix`
+      ## Adding a New Definition
+
+      1. Create `defs/<type>/<name>.nix` following the pattern above.
+      2. Import it in the relevant preset in `presets/` (e.g. `presets/default.nix`).
+      3. If an agent references the new skill/mcpServer, add it to the agent's `skills`/`mcpServers` list.
+      4. Run `nix flake check` — `modules/system.nix` validates all cross-references at eval time.
+
+      ## Validation Checks (auto-run by `nix flake check`)
+
+      - `delegatesTo` targets must exist in `config.agents`
+      - `skills` list must reference defined skill names
+      - `mcpServers` list must reference defined MCP server names
+      - `task.rules` keys must be agent names
+      - Profile `agents`/`skills`/`mcpServers` lists must reference existing definitions
+
+      ## Preset Pattern
+
+      ```nix
+      # presets/my-preset.nix
+      { ... }:
+      {
+        imports = [
+          ../defs/agents/my-agent.nix
+          ../defs/skills/my-skill.nix
+          ../defs/mcps/my-server.nix
+        ];
+      }
+      ```
+
+      ## Profile Pattern
+
+      Profiles activate per-directory, filtering agents/skills and overriding tier/permissions:
+
+      ```nix
+      # presets/profiles.nix
+      { ... }:
+      {
+        profiles.work = {
+          pathPrefixes = [ "~/work/" ];
+          agents = [ "code-monkey" "explore" ];  # empty = all
+          skills = [ "swe-pruner-mcp" ];          # empty = all
+          mcpServers = [ "swe-pruner" ];
+          tierMapping = { powerful = "anthropic/claude-sonnet-4-6"; };
+          permissions = { webfetch = "deny"; edit = null; bash = null; task = null; };
+        };
+      }
+      ```
     '';
     resources = { };
     src = null;

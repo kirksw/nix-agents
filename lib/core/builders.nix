@@ -163,7 +163,7 @@ let
       codexOutputs = ''
         ${commonOutputs}
         cp ${builtins.toFile "AGENTS.md" generated.agentsMd} "$out/AGENTS.md"
-        echo "Codex generator is experimental. Output format may change." > "$out/EXPERIMENTAL"
+        cp ${builtins.toFile "mcp.json" generated.mcpJson} "$out/mcp.json"
       '';
 
       piOutputs = ''
@@ -192,7 +192,6 @@ let
           '') generated.skillRules
         )}
         cp ${builtins.toFile "cursor-mcp.json" generated.mcpJson} "$out/.cursor/mcp.json"
-        echo "Cursor generator is experimental. Output format may change." > "$out/EXPERIMENTAL"
       '';
 
       ampOutputs = ''
@@ -200,7 +199,6 @@ let
         cp ${hookManifest} "$out/hook-manifest"
         cp ${builtins.toFile "amp.json" generated.ampJson} "$out/amp.json"
         cp ${builtins.toFile "AGENTS.md" generated.agentsMd} "$out/AGENTS.md"
-        echo "Amp generator is experimental. Output format may change." > "$out/EXPERIMENTAL"
       '';
 
       outputScript =

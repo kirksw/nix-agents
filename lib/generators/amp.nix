@@ -1,5 +1,4 @@
-# EXPERIMENTAL: Amp Code generator
-# Produces amp.json and AGENTS.md
+# Amp Code generator — produces amp.json and AGENTS.md.
 {
   lib,
   config,
