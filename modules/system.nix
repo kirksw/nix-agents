@@ -84,8 +84,56 @@ let
     else
       true;
 
+  checkProfileRefs =
+    let
+      profileNames = builtins.attrNames config.profiles;
+      allAgents = builtins.attrNames config.agents;
+      allSkills = builtins.attrNames config.skills;
+      allMcp = builtins.attrNames config.mcpServers;
+      allProviders = builtins.attrNames config.providers;
+
+      badAgents = lib.concatMap (
+        p:
+        map (a: "${p}.agents: ${a}") (
+          lib.filter (a: !builtins.elem a allAgents) config.profiles.${p}.agents
+        )
+      ) profileNames;
+
+      badSkills = lib.concatMap (
+        p:
+        map (s: "${p}.skills: ${s}") (
+          lib.filter (s: !builtins.elem s allSkills) config.profiles.${p}.skills
+        )
+      ) profileNames;
+
+      badMcp = lib.concatMap (
+        p:
+        map (m: "${p}.mcpServers: ${m}") (
+          lib.filter (m: !builtins.elem m allMcp) config.profiles.${p}.mcpServers
+        )
+      ) profileNames;
+
+      badProviders = lib.concatMap (
+        p:
+        map (pr: "${p}.providers: ${pr}") (
+          lib.filter (pr: !builtins.elem pr allProviders) config.profiles.${p}.providers
+        )
+      ) profileNames;
+
+      bad = badAgents ++ badSkills ++ badMcp ++ badProviders;
+    in
+    if bad != [ ] then
+      throw "Profile references do not exist: ${lib.concatStringsSep ", " bad}"
+    else
+      true;
+
   allValid =
-    checkDelegatesExist && checkNoSelfDelegation && checkTaskPerms && checkSkillRefs && checkMcpRefs;
+    checkDelegatesExist
+    && checkNoSelfDelegation
+    && checkTaskPerms
+    && checkSkillRefs
+    && checkMcpRefs
+    && checkProfileRefs;
 in
 {
   options = {
