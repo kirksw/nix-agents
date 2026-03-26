@@ -76,8 +76,7 @@ let
       tierMapping = resolvedTierMapping;
       defaultPermissions = resolvedDefaultPermissions;
     };
-in
-{
+
   mkAgentSystem =
     {
       pkgs,
@@ -225,7 +224,8 @@ in
 
   # Build profile metadata for use with mkWrappedTool.
   # Returns an attrset of profileName -> { storePath, pathPrefixes } for all
-  # profiles defined in the evaluated modules.
+  # profiles defined in the evaluated modules. Delegates to mkAgentSystem so
+  # there is a single code path for building per-profile store paths.
   mkProfileMeta =
     {
       pkgs,
@@ -239,103 +239,24 @@ in
         inherit modules;
         specialArgs = { inherit inputs; };
       };
-      mkAgentSystemLocal =
-        profileName:
-        let
-          config = resolveProfile evaluated.config profileName;
-          generated = mkGenerator target {
-            inherit lib config pkgs src;
-          };
-          # Simplified build reusing the same logic as mkAgentSystem but inline
-          # to avoid a circular reference (mkAgentSystem is defined in the same let).
-          # We evaluate the modules fresh per profile using the already-evaluated config.
-          hookScripts = lib.imap0 (
-            i: hook:
-            let
-              script = pkgs.writeShellScript "nix-agents-hook-${hook.event}-${toString i}" (
-                (lib.optionalString (hook.package != null) ''
-                  export PATH="${hook.package}/bin:$PATH"
-                '')
-                + hook.command
-              );
-            in
-            {
-              inherit (hook) event;
-              path = "${script}";
-            }
-          ) config.hooks;
-          hookManifest = builtins.toFile "hook-manifest-${profileName}" (
-            lib.concatMapStringsSep "\n" (h: "${h.event}:${h.path}") hookScripts
-          );
-          writeAgent = name: content: ''
-            cp ${builtins.toFile "agent-${profileName}-${name}.md" content} "$out/agents/${name}.md"
-          '';
-          skillContent =
-            name: skill:
-            if skill.src != null then builtins.readFile (skill.src + "/SKILL.md") else skill.content;
-          writeSkill = name: content: ''
-            mkdir -p "$out/skills/${name}"
-            cp ${builtins.toFile "skill-${profileName}-${name}.md" content} "$out/skills/${name}/SKILL.md"
-          '';
-          commonOutputs = ''
-            mkdir -p "$out/agents" "$out/skills"
-            ${lib.concatStringsSep "\n" (lib.mapAttrsToList writeAgent generated.agents)}
-            ${lib.concatStringsSep "\n" (
-              lib.mapAttrsToList (name: skill: writeSkill name (skillContent name skill)) config.skills
-            )}
-            cp ${hookManifest} "$out/hook-manifest"
-          '';
-          outputScript =
-            if target == "claude" then
-              ''
-                ${commonOutputs}
-                cp ${builtins.toFile "settings-${profileName}.json" generated.settingsJson} "$out/settings.json"
-                cp ${builtins.toFile "CLAUDE-${profileName}.md" generated.claudeMd} "$out/CLAUDE.md"
-                cp ${builtins.toFile "mcp-${profileName}.json" generated.mcpJson} "$out/.mcp.json"
-              ''
-            else if target == "codex" then
-              ''
-                ${commonOutputs}
-                cp ${builtins.toFile "AGENTS-${profileName}.md" generated.agentsMd} "$out/AGENTS.md"
-              ''
-            else if target == "cursor" then
-              ''
-                mkdir -p "$out/.cursor/rules"
-                ${lib.concatStringsSep "\n" (
-                  lib.mapAttrsToList (name: content: ''
-                    cp ${builtins.toFile "cursor-agent-${profileName}-${name}.mdc" content} "$out/.cursor/rules/agent-${name}.mdc"
-                  '') generated.agentRules
-                )}
-                ${lib.concatStringsSep "\n" (
-                  lib.mapAttrsToList (name: content: ''
-                    cp ${builtins.toFile "cursor-skill-${profileName}-${name}.mdc" content} "$out/.cursor/rules/skill-${name}.mdc"
-                  '') generated.skillRules
-                )}
-                cp ${builtins.toFile "cursor-mcp-${profileName}.json" generated.mcpJson} "$out/.cursor/mcp.json"
-              ''
-            else if target == "amp" then
-              ''
-                mkdir -p "$out"
-                cp ${hookManifest} "$out/hook-manifest"
-                cp ${builtins.toFile "amp-${profileName}.json" generated.ampJson} "$out/amp.json"
-                cp ${builtins.toFile "AGENTS-${profileName}.md" generated.agentsMd} "$out/AGENTS.md"
-              ''
-            else
-              ''
-                ${commonOutputs}
-                cp ${builtins.toFile "opencode-${profileName}.json" generated.opencodeJson} "$out/opencode.json"
-                cp ${builtins.toFile "AGENTS-${profileName}.md" generated.agentsMd} "$out/AGENTS.md"
-              '';
-        in
-        pkgs.runCommand "nix-agents-${target}-${profileName}-config" { } ''
-          mkdir -p "$out"
-          ${outputScript}
-        '';
     in
     lib.mapAttrs (name: profile: {
-      storePath = mkAgentSystemLocal name;
+      storePath = mkAgentSystem {
+        inherit
+          pkgs
+          target
+          modules
+          src
+          inputs
+          ;
+        profile = name;
+      };
       inherit (profile) pathPrefixes;
     }) evaluated.config.profiles;
+
+in
+{
+  inherit mkAgentSystem mkProfileMeta;
 
   mkWrappedTool =
     {
