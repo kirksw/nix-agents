@@ -1,5 +1,4 @@
-# EXPERIMENTAL: Cursor rules generator
-# Produces .cursor/rules/*.mdc files and .cursor/mcp.json
+# Cursor rules generator — produces .cursor/rules/*.mdc files and .cursor/mcp.json.
 {
   lib,
   config,

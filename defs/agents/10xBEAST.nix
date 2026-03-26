@@ -50,7 +50,7 @@
       webfetch = "allow";
     };
     skills = [ ];
-    mcpServers = [ ];
+    mcpServers = [ "swe-pruner" ];
     orchestration.patterns = { };
     orchestration.antiPatterns = [ ];
     overrides = { };

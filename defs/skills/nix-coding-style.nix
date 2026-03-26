@@ -1,6 +1,6 @@
 {
   skills.nix-coding-style = {
-    description = "Nix code formatting and style conventions for nixfiles-v2. Use when writing or reviewing Nix code.";
+    description = "Nix code formatting and style conventions for nix-agents. Use when writing or reviewing Nix code in this repository.";
     content = ''
       # Nix Coding Style
 
@@ -9,79 +9,90 @@
       ## Formatting
 
       - Use 2-space indentation
-      - Use trailing commas in attribute sets and lists
-      - Format files with `nixfmt` before committing
+      - Use `nixfmt-rfc-style` (not plain `nixfmt`) — the RFC style formatter
+      - Format all `.nix` files before committing: `nix run .#fmt`
+      - Check format without modifying: `nixfmt --check <file>`
 
-      ## Module Structure
+      ## Linting
+
+      ```bash
+      nix run .#lint   # statix + deadnix
+      statix check .   # anti-pattern detection
+      deadnix --fail . # unused binding detection
+      ```
+
+      ## Module Pattern (defs/ files)
+
+      Agent, skill, and MCP defs are plain attrsets — no `{ config, lib, ... }:` boilerplate
+      unless the file genuinely needs specialArgs:
 
       ```nix
+      # defs/agents/my-agent.nix
       {
-        lib,
-        config,
-        pkgs,
-        ...
-      }:
+        agents.my-agent = {
+          description = "…";
+          model = "balanced";
+          prompt = ''…'';
+        };
+      }
+      ```
 
+      ## Module Pattern (modules/ files)
+
+      Module declarations use NixOS-style options:
+
+      ```nix
+      # modules/my-module.nix
+      { lib, types, ... }:
       {
-        options = {
-          homeModules.<name>.enable = lib.mkEnableOption "description";
+        options.myOption = lib.mkOption {
+          type = types.str;
+          default = "";
+          description = "…";
         };
+      }
+      ```
 
-        config = lib.mkIf config.homeModules.<name>.enable {
-          # implementation
-        };
+      ## Config Generation Pattern
+
+      Generators produce JSON/YAML strings via `builtins.toJSON`:
+
+      ```nix
+      builtins.toJSON {
+        agents = lib.mapAttrsToList (name: agent: { inherit name; … }) config.agents;
       }
       ```
 
       ## Option Naming
 
-      - Use prefixed namespaces:
-        - `homeModules.<name>.enable`
-        - `darwinModules.<name>.enable`
-        - `nixosModules.<name>.enable`
-      - Multi-word options use camelCase: `homeModules.aiDev.enable`
-
-      ## File Organization
-
-      - One module per file: `modules/home/programs/<tool>.nix`
-      - Group related options together
-      - Keep modules focused and composable
+      - Use kebab-case for agent/skill/mcp names: `agents.my-agent`, `skills.nix-flake-ops`
+      - Use camelCase for Nix option paths: `options.tierMapping`, `options.mcpServers`
 
       ## Common Patterns
 
-      ### Conditional config
+      ### Optional attribute inclusion
       ```nix
-      config = lib.mkIf config.homeModules.<name>.enable {
-        # settings
-      };
+      { required = "value"; }
+      // lib.optionalAttrs (condition) { optional = "value"; }
       ```
 
-      ### Optional attributes
+      ### Filtering attrsets
       ```nix
-      config = {
-        # always present
-      } // lib.optionalAttrs config.homeModules.<name>.enable {
-        # optional
-      };
+      lib.filterAttrs (name: _: builtins.elem name whitelist) attrset
       ```
 
-      ### Package reference
+      ### Mapping attrsets to lists
       ```nix
-      home.packages = [ pkgs.<package> ];
-      ```
-
-      ### File generation
-      ```nix
-      home.file."path/to/file".text = builtins.toJSON config;
+      lib.mapAttrsToList (name: value: { inherit name; … }) attrset
       ```
 
       ## Testing
 
       Run before committing:
       ```bash
-      nixfmt --check **/*.nix
-      statix check
-      nix flake check --no-build
+      nix run .#fmt     # format all .nix files
+      nix run .#lint    # statix + deadnix
+      nix flake check   # full check suite
       ```
     '';
     resources = { };

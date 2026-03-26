@@ -1,4 +1,4 @@
-# EXPERIMENTAL: Codex generator output format may change.
+# Codex generator — produces per-agent markdown, AGENTS.md, and mcp.json.
 # MCP server config and permission handling are minimal compared to OpenCode/Claude generators.
 {
   lib,

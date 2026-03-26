@@ -62,10 +62,27 @@
           MERMAID
         '';
 
+        evals = import ./checks/evals.nix {
+          inherit
+            pkgs
+            opencodeConfig
+            claudeConfig
+            codexConfig
+            ampConfig
+            ;
+        };
+
+        evalCheckNames = builtins.attrNames evals;
+
         benchScript = pkgs.writeShellScriptBin "bench" ''
           set -euo pipefail
-          echo "Evals directory has been removed. Re-add an evals/ directory to use bench." >&2
-          exit 1
+          echo "Running eval suite..."
+          nix build ${
+            pkgs.lib.concatStringsSep " " (
+              map (name: ".#checks.${system}.${name}") evalCheckNames
+            )
+          }
+          echo "All evals passed."
         '';
 
         syncAgents = pkgs.writeShellScriptBin "sync-agents" ''
@@ -315,6 +332,42 @@
             touch $out
           '';
 
+          schema-compat-codex =
+            pkgs.runCommand "schema-compat-codex"
+              {
+                nativeBuildInputs = [ pkgs.check-jsonschema ];
+              }
+              ''
+                check-jsonschema \
+                  --schemafile ${./lib/schemas/codex-mcp.json} \
+                  ${codexConfig}/mcp.json
+                touch $out
+              '';
+
+          schema-compat-cursor =
+            pkgs.runCommand "schema-compat-cursor"
+              {
+                nativeBuildInputs = [ pkgs.check-jsonschema ];
+              }
+              ''
+                check-jsonschema \
+                  --schemafile ${./lib/schemas/cursor-mcp.json} \
+                  ${cursorConfig}/.cursor/mcp.json
+                touch $out
+              '';
+
+          schema-compat-amp =
+            pkgs.runCommand "schema-compat-amp"
+              {
+                nativeBuildInputs = [ pkgs.check-jsonschema ];
+              }
+              ''
+                check-jsonschema \
+                  --schemafile ${./lib/schemas/amp.json} \
+                  ${ampConfig}/amp.json
+                touch $out
+              '';
+
           wrapper-smoke-codex = pkgs.runCommand "wrapper-smoke-codex" { } ''
             ${pkgs.bash}/bin/bash -n ${
               library.mkWrappedTool {
@@ -343,7 +396,8 @@
             test -f ${self.packages.${system}.observe-service}/bin/agent-observe
             touch $out
           '';
-        };
+        }
+        // evals;
       }
     )
     // {
