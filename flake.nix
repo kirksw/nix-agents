@@ -154,7 +154,7 @@
       {
         lib = {
           inherit (library) evalModules types;
-          inherit (library) mkAgentSystem mkWrappedTool;
+          inherit (library) mkAgentSystem mkProfileMeta mkWrappedTool;
         };
 
         packages = {

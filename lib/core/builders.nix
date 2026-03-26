@@ -76,8 +76,7 @@ let
       tierMapping = resolvedTierMapping;
       defaultPermissions = resolvedDefaultPermissions;
     };
-in
-{
+
   mkAgentSystem =
     {
       pkgs,
@@ -223,19 +222,187 @@ in
       ${outputScript}
     '';
 
+  # Build profile metadata for use with mkWrappedTool.
+  # Returns an attrset of profileName -> { storePath, pathPrefixes } for all
+  # profiles defined in the evaluated modules. Delegates to mkAgentSystem so
+  # there is a single code path for building per-profile store paths.
+  mkProfileMeta =
+    {
+      pkgs,
+      modules,
+      target,
+      src ? null,
+      inputs ? { },
+    }:
+    let
+      evaluated = evalModules {
+        inherit modules;
+        specialArgs = { inherit inputs; };
+      };
+    in
+    lib.mapAttrs (name: profile: {
+      storePath = mkAgentSystem {
+        inherit
+          pkgs
+          target
+          modules
+          src
+          inputs
+          ;
+        profile = name;
+      };
+      inherit (profile) pathPrefixes;
+      # Resolve provider names to full provider objects so mkWrappedTool
+      # can generate credential-resolution shell code at build time.
+      providers = map (pname: evaluated.config.providers.${pname}) profile.providers;
+    }) evaluated.config.profiles;
+
+  # Generate a shell snippet that resolves one provider's credential and
+  # exports it as the tool's expected env var. Failures are silent so the
+  # wrapper never hard-errors when a credential backend is unavailable.
+  #
+  # For "sops" the credentialRef must use the format "<file>:<key>" where
+  # <file> is the path to the sops-encrypted file and <key> is the attribute
+  # name to extract.
+  mkCredentialSnippet =
+    provider:
+    let
+      src = provider.credentialSource;
+      ref = provider.credentialRef;
+      envVar = provider.envVar;
+    in
+    # All snippets follow the same pattern:
+    #   1. Suppress shell trace mode during credential fetch to avoid leaking
+    #      values in debug output (set +x / set -x restore).
+    #   2. Unset the intermediate variable after export so it doesn't linger.
+    let
+      wrapCredFetch =
+        fetchExpr:
+        ''
+          { _nax_xtrace="''${-//[^x]/}"; set +x; } 2>/dev/null
+          _nax_cred=${fetchExpr}
+          [ -n "$_nax_cred" ] && export ${envVar}="$_nax_cred"
+          unset _nax_cred
+          { [ -n "$_nax_xtrace" ] && set -x || true; } 2>/dev/null
+        '';
+    in
+    if src == "env" then
+      # ref is the name of the env var to read from; re-export under envVar.
+      wrapCredFetch ''"''${${ref}:-}"''
+    else if src == "protonpass" then
+      wrapCredFetch ''$(protonpass-cli item get "${ref}" --fields password 2>/dev/null) || true''
+    else if src == "apple-keychain" then
+      wrapCredFetch ''$(security find-generic-password -a "$(id -un)" -s "${ref}" -w 2>/dev/null) || true''
+    else
+      # sops: credentialRef is "file:key"; split at the first colon.
+      # Remaining colons in the key are preserved.
+      let
+        parts = lib.splitString ":" ref;
+        sopsFile = lib.head parts;
+        sopsKey = lib.concatStringsSep ":" (lib.tail parts);
+      in
+      wrapCredFetch ''$(sops --decrypt --extract "[\"${sopsKey}\"]" "${sopsFile}" 2>/dev/null) || true'';
+
+in
+{
+  inherit mkAgentSystem mkProfileMeta;
+
   mkWrappedTool =
     {
       pkgs,
       target,
       tool,
       agentSystem,
+      # Optional: attrset of profileName -> { storePath: path; pathPrefixes: listOf str; providers: list; }
+      # Built with mkProfileMeta. When non-empty the wrapper selects a profile at
+      # runtime based on $PWD or a .nix-agents-profile override file, and resolves
+      # credentials for that profile before exec-ing the tool.
+      profileMeta ? { },
     }:
     let
       toolBin = if target == "claude" then "${tool}/bin/claude" else "${tool}/bin/${target}";
       binName = target;
+
+      hasProfiles = profileMeta != { };
+
+      # Sort all (profile, prefix) pairs by descending prefix length so that
+      # the longest (most-specific) prefix matches first in the shell case.
+      allPrefixes = lib.concatMap (
+        name:
+        map (prefix: { inherit name prefix; }) profileMeta.${name}.pathPrefixes
+      ) (builtins.attrNames profileMeta);
+
+      sortedPrefixes = lib.sort (
+        a: b: builtins.stringLength a.prefix > builtins.stringLength b.prefix
+      ) allPrefixes;
+
+      # Expand ~ to literal $HOME so shell case patterns match correctly.
+      expandPrefix =
+        prefix: if lib.hasPrefix "~/" prefix then "$HOME/${lib.removePrefix "~/" prefix}" else prefix;
+
+      # case arms: path prefix -> profile name
+      prefixCaseArms = lib.concatStringsSep "\n" (
+        map ({ name, prefix }: "          ${expandPrefix prefix}*) _NAX_PROFILE=${name} ;;") sortedPrefixes
+      );
+
+      # case arms: profile name -> store path
+      profilePathCaseArms = lib.concatStringsSep "\n" (
+        lib.mapAttrsToList (
+          name: meta: "          ${name}) _NAX_CONFIG=${meta.storePath} ;;"
+        ) profileMeta
+      );
+
+      # Emitted at the top of the wrapper when profiles are configured.
+      # Sets _NAX_CONFIG to the appropriate store path based on $PWD.
+      profileBlock = lib.optionalString hasProfiles ''
+        _NAX_PROFILE=""
+        _d="$PWD"
+        while [ "$_d" != "/" ] && [ -n "$_d" ]; do
+          if [ -f "$_d/.nix-agents-profile" ]; then
+            _NAX_PROFILE=$(cat "$_d/.nix-agents-profile")
+            break
+          fi
+          _d="''${_d%/*}"
+        done
+        if [ -z "$_NAX_PROFILE" ]; then
+          case "$PWD" in
+        ${prefixCaseArms}
+          esac
+        fi
+        case "''${_NAX_PROFILE:-}" in
+        ${profilePathCaseArms}
+          *) _NAX_CONFIG="${agentSystem}" ;;
+        esac
+      '';
+
+      # Generate per-profile credential resolution as a case statement.
+      # Emitted after profile selection so _NAX_PROFILE is already set.
+      credentialBlock =
+        let
+          mkProfileCredArm =
+            name: meta:
+            let
+              snippets = lib.concatStrings (map mkCredentialSnippet meta.providers);
+            in
+            lib.optionalString (snippets != "") ''
+                ${name})
+              ${snippets}    ;;
+            '';
+          arms = lib.concatStrings (lib.mapAttrsToList mkProfileCredArm profileMeta);
+        in
+        lib.optionalString (hasProfiles && arms != "") ''
+          case "''${_NAX_PROFILE:-}" in
+          ${arms}  esac
+        '';
+
+      # The config store path used throughout the rest of the wrapper.
+      # Statically embedded when there are no profiles, runtime variable when there are.
+      nixAgentsConfig = if hasProfiles then "$_NAX_CONFIG" else "${agentSystem}";
     in
     pkgs.writeShellScriptBin binName ''
-      _NAX_HOOKS="${agentSystem}/hook-manifest"
+      ${profileBlock}
+      ${credentialBlock}
+      _NAX_HOOKS="${nixAgentsConfig}/hook-manifest"
       _run_hook() {
         local event="$1"
         local json="''${2:-{}}"
@@ -251,29 +418,29 @@ in
       _run_hook session-start "{}"
 
       if [ "${target}" = "opencode" ]; then
-        export OPENCODE_CONFIG="${agentSystem}/opencode.json"
-        export OPENCODE_CONFIG_DIR="${agentSystem}"
+        export OPENCODE_CONFIG="${nixAgentsConfig}/opencode.json"
+        export OPENCODE_CONFIG_DIR="${nixAgentsConfig}"
         export OPENCODE_CONFIG_CONTENT='{"autoupdate":false}'
       fi
 
       if [ "${target}" = "claude" ]; then
         _nix_agents_dir="''${XDG_DATA_HOME:-$HOME/.local/share}/nix-agents/claude"
         mkdir -p "$_nix_agents_dir"
-        ln -sfn "${agentSystem}/agents" "$_nix_agents_dir/agents"
-        ln -sfn "${agentSystem}/skills" "$_nix_agents_dir/skills"
-        [ -f "${agentSystem}/CLAUDE.md" ] && ln -sfn "${agentSystem}/CLAUDE.md" "$_nix_agents_dir/CLAUDE.md"
+        ln -sfn "${nixAgentsConfig}/agents" "$_nix_agents_dir/agents"
+        ln -sfn "${nixAgentsConfig}/skills" "$_nix_agents_dir/skills"
+        [ -f "${nixAgentsConfig}/CLAUDE.md" ] && ln -sfn "${nixAgentsConfig}/CLAUDE.md" "$_nix_agents_dir/CLAUDE.md"
         export CLAUDE_CONFIG_DIR="$_nix_agents_dir"
-        set -- --settings "${agentSystem}/settings.json" "$@"
-        [ -f "${agentSystem}/.mcp.json" ] && set -- --mcp-config "${agentSystem}/.mcp.json" "$@"
+        set -- --settings "${nixAgentsConfig}/settings.json" "$@"
+        [ -f "${nixAgentsConfig}/.mcp.json" ] && set -- --mcp-config "${nixAgentsConfig}/.mcp.json" "$@"
         exec "${toolBin}" "$@"
       fi
 
       if [ "${target}" = "codex" ]; then
         _nix_agents_dir="''${XDG_DATA_HOME:-$HOME/.local/share}/nix-agents/codex"
         mkdir -p "$_nix_agents_dir"
-        ln -sfn "${agentSystem}/agents" "$_nix_agents_dir/agents"
-        ln -sfn "${agentSystem}/skills" "$_nix_agents_dir/skills"
-        [ -f "${agentSystem}/AGENTS.md" ] && ln -sfn "${agentSystem}/AGENTS.md" "$_nix_agents_dir/AGENTS.md"
+        ln -sfn "${nixAgentsConfig}/agents" "$_nix_agents_dir/agents"
+        ln -sfn "${nixAgentsConfig}/skills" "$_nix_agents_dir/skills"
+        [ -f "${nixAgentsConfig}/AGENTS.md" ] && ln -sfn "${nixAgentsConfig}/AGENTS.md" "$_nix_agents_dir/AGENTS.md"
         export CODEX_CONFIG_DIR="$_nix_agents_dir"
         exec "${toolBin}" "$@"
       fi
