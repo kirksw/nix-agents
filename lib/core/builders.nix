@@ -271,35 +271,37 @@ let
       ref = provider.credentialRef;
       envVar = provider.envVar;
     in
+    # All snippets follow the same pattern:
+    #   1. Suppress shell trace mode during credential fetch to avoid leaking
+    #      values in debug output (set +x / set -x restore).
+    #   2. Unset the intermediate variable after export so it doesn't linger.
+    let
+      wrapCredFetch =
+        fetchExpr:
+        ''
+          { _nax_xtrace="''${-//[^x]/}"; set +x; } 2>/dev/null
+          _nax_cred=${fetchExpr}
+          [ -n "$_nax_cred" ] && export ${envVar}="$_nax_cred"
+          unset _nax_cred
+          { [ -n "$_nax_xtrace" ] && set -x || true; } 2>/dev/null
+        '';
+    in
     if src == "env" then
       # ref is the name of the env var to read from; re-export under envVar.
-      ''
-        _nax_cred="''${${ref}:-}"
-        [ -n "$_nax_cred" ] && export ${envVar}="$_nax_cred"
-      ''
+      wrapCredFetch ''"''${${ref}:-}"''
     else if src == "protonpass" then
-      ''
-        _nax_cred=$(protonpass-cli item get "${ref}" --fields password 2>/dev/null) || true
-        [ -n "$_nax_cred" ] && export ${envVar}="$_nax_cred"
-      ''
+      wrapCredFetch ''$(protonpass-cli item get "${ref}" --fields password 2>/dev/null) || true''
     else if src == "apple-keychain" then
-      ''
-        _nax_cred=$(security find-generic-password -a "$(id -un)" -s "${ref}" -w 2>/dev/null) || true
-        [ -n "$_nax_cred" ] && export ${envVar}="$_nax_cred"
-      ''
+      wrapCredFetch ''$(security find-generic-password -a "$(id -un)" -s "${ref}" -w 2>/dev/null) || true''
     else
-      # sops: split "file:key" at the first colon
+      # sops: credentialRef is "file:key"; split at the first colon.
+      # Remaining colons in the key are preserved.
       let
-        colonIdx = lib.findFirst (i: builtins.substring i 1 ref == ":") null (
-          lib.range 0 (builtins.stringLength ref - 1)
-        );
-        sopsFile = if colonIdx != null then builtins.substring 0 colonIdx ref else ref;
-        sopsKey = if colonIdx != null then builtins.substring (colonIdx + 1) (-1) ref else "";
+        parts = lib.splitString ":" ref;
+        sopsFile = lib.head parts;
+        sopsKey = lib.concatStringsSep ":" (lib.tail parts);
       in
-      ''
-        _nax_cred=$(sops --decrypt --extract "[\"${sopsKey}\"]" "${sopsFile}" 2>/dev/null) || true
-        [ -n "$_nax_cred" ] && export ${envVar}="$_nax_cred"
-      '';
+      wrapCredFetch ''$(sops --decrypt --extract "[\"${sopsKey}\"]" "${sopsFile}" 2>/dev/null) || true'';
 
 in
 {
