@@ -84,6 +84,7 @@
       3. If results are insufficient, call again without question for full content
       4. Check stats file to verify pruning effectiveness
     '';
+    version = "1.0.0";
     resources = { };
     src = null;
   };

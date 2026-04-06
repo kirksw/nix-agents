@@ -15,6 +15,7 @@ _: {
 
       If no session file exists, proceed normally — do not error or warn.
     '';
+    version = "1.0.0";
     resources = { };
     src = null;
   };

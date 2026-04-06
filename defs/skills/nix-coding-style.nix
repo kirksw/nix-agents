@@ -95,6 +95,7 @@
       nix flake check   # full check suite
       ```
     '';
+    version = "1.0.0";
     resources = { };
     src = null;
   };

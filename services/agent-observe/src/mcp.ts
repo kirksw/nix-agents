@@ -1,7 +1,8 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { querySessions, querySession, querySummary } from './db.js';
+import { querySessions, querySession, querySummary, recomputeEfficacy, db } from './db.js';
+import { queryInsights } from './insights.js';
 
 export async function startMcp(): Promise<void> {
   const server = new Server({ name: 'agent-observe', version: '0.1.0' }, { capabilities: { tools: {} } });
@@ -35,6 +36,16 @@ export async function startMcp(): Promise<void> {
           properties: { id: { type: 'string' } },
         },
       },
+      {
+        name: 'observe_insights',
+        description: 'Analyze session history to find underperforming skills, low-usage agents, and model tier optimization opportunities.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            minSessions: { type: 'number', description: 'Minimum sessions per skill version to be considered (default: 10)' },
+          },
+        },
+      },
     ],
   }));
 
@@ -58,6 +69,11 @@ export async function startMcp(): Promise<void> {
         return { content: [{ type: 'text', text: `Session not found: ${args.id as string}` }], isError: true };
       }
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    }
+    if (req.params.name === 'observe_insights') {
+      recomputeEfficacy();
+      const insights = queryInsights(db, { minSessions: args.minSessions as number | undefined });
+      return { content: [{ type: 'text', text: JSON.stringify(insights, null, 2) }] };
     }
     throw new Error(`Unknown tool: ${req.params.name}`);
   });

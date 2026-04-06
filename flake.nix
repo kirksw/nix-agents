@@ -47,6 +47,17 @@
 
         piCodingAgent = pkgs.callPackage ./targets/pi/package { };
 
+        updateScript = pkgs.writeShellApplication {
+          name = "update";
+          runtimeInputs = [
+            pkgs.curl
+            pkgs.jq
+            pkgs.git
+            pkgs.nix
+          ];
+          text = builtins.readFile ./lib/updater/update.sh;
+        };
+
         nixFiles = pkgs.lib.fileset.toSource {
           root = ./.;
           fileset = pkgs.lib.fileset.fileFilter (f: f.hasExt "nix") ./.;
@@ -200,6 +211,7 @@
           cursor-config = cursorConfig;
           amp-config = ampConfig;
           pi-coding-agent = piCodingAgent;
+          update-script = updateScript;
           observe-service = pkgs.callPackage ./services/agent-observe { };
           default = opencodeConfig;
         };
@@ -221,6 +233,10 @@
           observe = {
             type = "app";
             program = "${self.packages.${system}.observe-service}/bin/agent-observe";
+          };
+          update = {
+            type = "app";
+            program = "${self.packages.${system}.update-script}/bin/update";
           };
           fmt = {
             type = "app";
