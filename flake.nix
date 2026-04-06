@@ -88,11 +88,7 @@
         benchScript = pkgs.writeShellScriptBin "bench" ''
           set -euo pipefail
           echo "Running eval suite..."
-          nix build ${
-            pkgs.lib.concatStringsSep " " (
-              map (name: ".#checks.${system}.${name}") evalCheckNames
-            )
-          }
+          nix build ${pkgs.lib.concatStringsSep " " (map (name: ".#checks.${system}.${name}") evalCheckNames)}
           echo "All evals passed."
         '';
 

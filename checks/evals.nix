@@ -48,11 +48,13 @@
   '';
 
   # settings.json must have permissions.allow as an array
-  eval-claude-settings = pkgs.runCommand "eval-claude-settings" { nativeBuildInputs = [ pkgs.jq ]; } ''
-    jq -e '.permissions.allow | type == "array"' ${claudeConfig}/settings.json > /dev/null \
-      || { echo "FAIL: settings.json missing permissions.allow array" >&2; exit 1; }
-    touch $out
-  '';
+  eval-claude-settings =
+    pkgs.runCommand "eval-claude-settings" { nativeBuildInputs = [ pkgs.jq ]; }
+      ''
+        jq -e '.permissions.allow | type == "array"' ${claudeConfig}/settings.json > /dev/null \
+          || { echo "FAIL: settings.json missing permissions.allow array" >&2; exit 1; }
+        touch $out
+      '';
 
   # hook-manifest must be empty or contain only valid event:path lines
   eval-hook-manifest = pkgs.runCommand "eval-hook-manifest" { } ''

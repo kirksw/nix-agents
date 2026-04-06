@@ -275,22 +275,18 @@ let
     let
       src = provider.credentialSource;
       ref = provider.credentialRef;
-      envVar = provider.envVar;
-    in
-    # All snippets follow the same pattern:
-    #   1. Suppress shell trace mode during credential fetch to avoid leaking
-    #      values in debug output (set +x / set -x restore).
-    #   2. Unset the intermediate variable after export so it doesn't linger.
-    let
-      wrapCredFetch =
-        fetchExpr:
-        ''
-          { _nax_xtrace="''${-//[^x]/}"; set +x; } 2>/dev/null
-          _nax_cred=${fetchExpr}
-          [ -n "$_nax_cred" ] && export ${envVar}="$_nax_cred"
-          unset _nax_cred
-          { [ -n "$_nax_xtrace" ] && set -x || true; } 2>/dev/null
-        '';
+      inherit (provider) envVar;
+      # All snippets follow the same pattern:
+      #   1. Suppress shell trace mode during credential fetch to avoid leaking
+      #      values in debug output (set +x / set -x restore).
+      #   2. Unset the intermediate variable after export so it doesn't linger.
+      wrapCredFetch = fetchExpr: ''
+        { _nax_xtrace="''${-//[^x]/}"; set +x; } 2>/dev/null
+        _nax_cred=${fetchExpr}
+        [ -n "$_nax_cred" ] && export ${envVar}="$_nax_cred"
+        unset _nax_cred
+        { [ -n "$_nax_xtrace" ] && set -x || true; } 2>/dev/null
+      '';
     in
     if src == "env" then
       # ref is the name of the env var to read from; re-export under envVar.
@@ -334,8 +330,7 @@ in
       # Sort all (profile, prefix) pairs by descending prefix length so that
       # the longest (most-specific) prefix matches first in the shell case.
       allPrefixes = lib.concatMap (
-        name:
-        map (prefix: { inherit name prefix; }) profileMeta.${name}.pathPrefixes
+        name: map (prefix: { inherit name prefix; }) profileMeta.${name}.pathPrefixes
       ) (builtins.attrNames profileMeta);
 
       sortedPrefixes = lib.sort (
@@ -353,9 +348,7 @@ in
 
       # case arms: profile name -> store path
       profilePathCaseArms = lib.concatStringsSep "\n" (
-        lib.mapAttrsToList (
-          name: meta: "          ${name}) _NAX_CONFIG=${meta.storePath} ;;"
-        ) profileMeta
+        lib.mapAttrsToList (name: meta: "          ${name}) _NAX_CONFIG=${meta.storePath} ;;") profileMeta
       );
 
       # Emitted at the top of the wrapper when profiles are configured.
