@@ -60,9 +60,10 @@ This scaffolds a flake that imports the default preset and lets you add agents, 
 ```
 
 `mkWrappedTool` also accepts `profile = "<name>"` to force a specific runtime profile namespace.
-When a profile is selected or forced, wrappers namespace their runtime files under profile-specific
-directories such as `~/.config/opencode/profiles/<profile>` and
-`~/.local/share/nix-agents/<tool>/profiles/<profile>`.
+When a profile is selected or forced, generated agent assets are projected into
+`~/.config/nix-agents/<tool>/profiles/<profile>`. Tools that keep native runtime state, such as
+OpenCode and Pi, still keep their own tool-specific XDG profile directories alongside that
+canonical `nix-agents` asset root.
 
 ## Built-in agents
 

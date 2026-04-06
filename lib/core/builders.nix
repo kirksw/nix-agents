@@ -419,10 +419,7 @@ in
       _NAX_BASE_CONFIG_HOME="''${XDG_CONFIG_HOME:-$HOME/.config}"
       _NAX_BASE_DATA_HOME="''${XDG_DATA_HOME:-$HOME/.local/share}"
       export NAX_PROFILE="''${_NAX_PROFILE:-default}"
-      _NAX_PROFILE_SUFFIX=""
-      if [ -n "''${_NAX_PROFILE:-}" ]; then
-        _NAX_PROFILE_SUFFIX="/profiles/$_NAX_PROFILE"
-      fi
+      _NAX_TOOL_CONFIG_DIR="$_NAX_BASE_CONFIG_HOME/nix-agents/${target}/profiles/$NAX_PROFILE"
       export NAX_SKILL_VERSIONS="${nixAgentsConfig}/skill-versions.json"
       export NAX_WRAPPER_PID=$$
       _run_hook() {
@@ -438,54 +435,78 @@ in
       }
       trap '_run_hook session-end "{}"' EXIT
       _run_hook session-start "{}"
+      _sync_link_dir() {
+        local source_dir="$1"
+        local target_path="$2"
+        rm -rf "$target_path"
+        if [ -d "$source_dir" ]; then
+          ln -sfn "$source_dir" "$target_path"
+        fi
+      }
+      _sync_link_file() {
+        local source_file="$1"
+        local target_path="$2"
+        rm -rf "$target_path"
+        if [ -f "$source_file" ]; then
+          ln -sfn "$source_file" "$target_path"
+        fi
+      }
 
       if [ "${target}" = "opencode" ]; then
+        mkdir -p "$_NAX_TOOL_CONFIG_DIR"
+        _sync_link_dir "${nixAgentsConfig}/agents" "$_NAX_TOOL_CONFIG_DIR/agents"
+        _sync_link_dir "${nixAgentsConfig}/skills" "$_NAX_TOOL_CONFIG_DIR/skills"
+        _sync_link_file "${nixAgentsConfig}/AGENTS.md" "$_NAX_TOOL_CONFIG_DIR/AGENTS.md"
+        _sync_link_file "${nixAgentsConfig}/opencode.json" "$_NAX_TOOL_CONFIG_DIR/opencode.json"
         if [ -n "''${_NAX_PROFILE:-}" ]; then
           export XDG_CONFIG_HOME="$_NAX_BASE_CONFIG_HOME/opencode/profiles/$_NAX_PROFILE"
           export XDG_DATA_HOME="$_NAX_BASE_DATA_HOME/opencode/profiles/$_NAX_PROFILE"
           mkdir -p "$XDG_CONFIG_HOME" "$XDG_DATA_HOME"
         fi
-        export OPENCODE_CONFIG="${nixAgentsConfig}/opencode.json"
-        export OPENCODE_CONFIG_DIR="${nixAgentsConfig}"
+        export OPENCODE_CONFIG="$_NAX_TOOL_CONFIG_DIR/opencode.json"
+        export OPENCODE_CONFIG_DIR="$_NAX_TOOL_CONFIG_DIR"
         export OPENCODE_CONFIG_CONTENT='{"autoupdate":false}'
       fi
 
       if [ "${target}" = "claude" ]; then
-        _nix_agents_dir="$_NAX_BASE_DATA_HOME/nix-agents/claude$_NAX_PROFILE_SUFFIX"
+        _nix_agents_dir="$_NAX_BASE_CONFIG_HOME/nix-agents/claude/profiles/$NAX_PROFILE"
         mkdir -p "$_nix_agents_dir"
-        ln -sfn "${nixAgentsConfig}/agents" "$_nix_agents_dir/agents"
-        ln -sfn "${nixAgentsConfig}/skills" "$_nix_agents_dir/skills"
-        [ -f "${nixAgentsConfig}/CLAUDE.md" ] && ln -sfn "${nixAgentsConfig}/CLAUDE.md" "$_nix_agents_dir/CLAUDE.md"
+        _sync_link_dir "${nixAgentsConfig}/agents" "$_nix_agents_dir/agents"
+        _sync_link_dir "${nixAgentsConfig}/skills" "$_nix_agents_dir/skills"
+        _sync_link_file "${nixAgentsConfig}/CLAUDE.md" "$_nix_agents_dir/CLAUDE.md"
+        _sync_link_file "${nixAgentsConfig}/settings.json" "$_nix_agents_dir/settings.json"
+        _sync_link_file "${nixAgentsConfig}/.mcp.json" "$_nix_agents_dir/.mcp.json"
         export CLAUDE_CONFIG_DIR="$_nix_agents_dir"
-        set -- --settings "${nixAgentsConfig}/settings.json" "$@"
-        [ -f "${nixAgentsConfig}/.mcp.json" ] && set -- --mcp-config "${nixAgentsConfig}/.mcp.json" "$@"
+        set -- --settings "$_nix_agents_dir/settings.json" "$@"
+        [ -f "$_nix_agents_dir/.mcp.json" ] && set -- --mcp-config "$_nix_agents_dir/.mcp.json" "$@"
         exec "${toolBin}" "$@"
       fi
 
       if [ "${target}" = "codex" ]; then
-        _nix_agents_dir="$_NAX_BASE_DATA_HOME/nix-agents/codex$_NAX_PROFILE_SUFFIX"
+        _nix_agents_dir="$_NAX_BASE_CONFIG_HOME/nix-agents/codex/profiles/$NAX_PROFILE"
         mkdir -p "$_nix_agents_dir"
-        ln -sfn "${nixAgentsConfig}/agents" "$_nix_agents_dir/agents"
-        ln -sfn "${nixAgentsConfig}/skills" "$_nix_agents_dir/skills"
-        [ -f "${nixAgentsConfig}/AGENTS.md" ] && ln -sfn "${nixAgentsConfig}/AGENTS.md" "$_nix_agents_dir/AGENTS.md"
+        _sync_link_dir "${nixAgentsConfig}/agents" "$_nix_agents_dir/agents"
+        _sync_link_dir "${nixAgentsConfig}/skills" "$_nix_agents_dir/skills"
+        _sync_link_file "${nixAgentsConfig}/AGENTS.md" "$_nix_agents_dir/AGENTS.md"
+        _sync_link_file "${nixAgentsConfig}/mcp.json" "$_nix_agents_dir/mcp.json"
         export CODEX_CONFIG_DIR="$_nix_agents_dir"
         exec "${toolBin}" "$@"
       fi
 
       if [ "${target}" = "pi" ]; then
-        _nix_agents_dir="$_NAX_BASE_DATA_HOME/nix-agents/pi$_NAX_PROFILE_SUFFIX"
+        _nix_agents_dir="$_NAX_BASE_CONFIG_HOME/nix-agents/pi/profiles/$NAX_PROFILE"
         _pi_agent_dir="$HOME/.pi/agent"
         mkdir -p "$_nix_agents_dir" "$_pi_agent_dir"
-        ln -sfn "${nixAgentsConfig}/agents" "$_nix_agents_dir/agents"
-        ln -sfn "${nixAgentsConfig}/skills" "$_nix_agents_dir/skills"
-        [ -f "${nixAgentsConfig}/AGENTS.md" ] && ln -sfn "${nixAgentsConfig}/AGENTS.md" "$_nix_agents_dir/AGENTS.md"
-        [ -d "${nixAgentsConfig}/extensions" ] && ln -sfn "${nixAgentsConfig}/extensions" "$_nix_agents_dir/extensions"
-        [ -d "${nixAgentsConfig}/prompts" ] && ln -sfn "${nixAgentsConfig}/prompts" "$_nix_agents_dir/prompts"
-        ln -sfn "$_nix_agents_dir/agents" "$_pi_agent_dir/agents"
-        ln -sfn "$_nix_agents_dir/skills" "$_pi_agent_dir/skills"
-        [ -f "$_nix_agents_dir/AGENTS.md" ] && ln -sfn "$_nix_agents_dir/AGENTS.md" "$_pi_agent_dir/AGENTS.md"
-        [ -d "$_nix_agents_dir/extensions" ] && ln -sfn "$_nix_agents_dir/extensions" "$_pi_agent_dir/extensions"
-        [ -d "$_nix_agents_dir/prompts" ] && ln -sfn "$_nix_agents_dir/prompts" "$_pi_agent_dir/prompts"
+        _sync_link_dir "${nixAgentsConfig}/agents" "$_nix_agents_dir/agents"
+        _sync_link_dir "${nixAgentsConfig}/skills" "$_nix_agents_dir/skills"
+        _sync_link_file "${nixAgentsConfig}/AGENTS.md" "$_nix_agents_dir/AGENTS.md"
+        _sync_link_dir "${nixAgentsConfig}/extensions" "$_nix_agents_dir/extensions"
+        _sync_link_dir "${nixAgentsConfig}/prompts" "$_nix_agents_dir/prompts"
+        _sync_link_dir "$_nix_agents_dir/agents" "$_pi_agent_dir/agents"
+        _sync_link_dir "$_nix_agents_dir/skills" "$_pi_agent_dir/skills"
+        _sync_link_file "$_nix_agents_dir/AGENTS.md" "$_pi_agent_dir/AGENTS.md"
+        _sync_link_dir "$_nix_agents_dir/extensions" "$_pi_agent_dir/extensions"
+        _sync_link_dir "$_nix_agents_dir/prompts" "$_pi_agent_dir/prompts"
         if [ -n "''${_NAX_PROFILE:-}" ]; then
           export XDG_CONFIG_HOME="$_NAX_BASE_CONFIG_HOME/pi/profiles/$_NAX_PROFILE"
           export XDG_DATA_HOME="$_NAX_BASE_DATA_HOME/pi/profiles/$_NAX_PROFILE"

@@ -109,65 +109,84 @@
             ${pkgs.coreutils}/bin/cp -R "$source_dir"/. "$target_dir"/
           }
 
+          sync_optional_tree() {
+            source_dir="$1"
+            target_dir="$2"
+
+            if [ -d "$source_dir" ]; then
+              sync_tree "$source_dir" "$target_dir"
+            else
+              ${pkgs.coreutils}/bin/rm -rf "$target_dir"
+            fi
+          }
+
+          sync_file() {
+            source_file="$1"
+            target_file="$2"
+
+            ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname "$target_file")"
+            if [ -f "$source_file" ]; then
+              ${pkgs.coreutils}/bin/cp "$source_file" "$target_file"
+            else
+              ${pkgs.coreutils}/bin/rm -f "$target_file"
+            fi
+          }
+
           CONFIG_DIR="''${XDG_CONFIG_HOME:-$HOME/.config}"
           DATA_DIR="''${XDG_DATA_HOME:-$HOME/.local/share}"
+          NIX_AGENTS_DIR="$CONFIG_DIR/nix-agents"
 
           # OpenCode
           if [ -d "${opencodeConfig}" ]; then
-            echo "Syncing OpenCode to $CONFIG_DIR/opencode..."
-            sync_tree "${opencodeConfig}/agents" "$CONFIG_DIR/opencode/agents"
-            sync_tree "${opencodeConfig}/skills" "$CONFIG_DIR/opencode/skills"
-            ${pkgs.coreutils}/bin/cp "${opencodeConfig}/AGENTS.md" "$CONFIG_DIR/opencode/AGENTS.md" 2>/dev/null || true
-            ${pkgs.coreutils}/bin/cp "${opencodeConfig}/opencode.json" "$CONFIG_DIR/opencode/opencode.json" 2>/dev/null || true
+            echo "Syncing OpenCode to $NIX_AGENTS_DIR/opencode/profiles/default..."
+            sync_tree "${opencodeConfig}/agents" "$NIX_AGENTS_DIR/opencode/profiles/default/agents"
+            sync_tree "${opencodeConfig}/skills" "$NIX_AGENTS_DIR/opencode/profiles/default/skills"
+            sync_file "${opencodeConfig}/AGENTS.md" "$NIX_AGENTS_DIR/opencode/profiles/default/AGENTS.md"
+            sync_file "${opencodeConfig}/opencode.json" "$NIX_AGENTS_DIR/opencode/profiles/default/opencode.json"
           fi
 
           # Claude
           if [ -d "${claudeConfig}" ]; then
-            echo "Syncing Claude to $DATA_DIR/nix-agents/claude..."
-            sync_tree "${claudeConfig}/agents" "$DATA_DIR/nix-agents/claude/agents"
-            sync_tree "${claudeConfig}/skills" "$DATA_DIR/nix-agents/claude/skills"
-            ${pkgs.coreutils}/bin/cp "${claudeConfig}/CLAUDE.md" "$DATA_DIR/nix-agents/claude/CLAUDE.md" 2>/dev/null || true
-            ${pkgs.coreutils}/bin/cp "${claudeConfig}/settings.json" "$DATA_DIR/nix-agents/claude/settings.json" 2>/dev/null || true
-            ${pkgs.coreutils}/bin/cp "${claudeConfig}/.mcp.json" "$DATA_DIR/nix-agents/claude/.mcp.json" 2>/dev/null || true
+            echo "Syncing Claude to $NIX_AGENTS_DIR/claude/profiles/default..."
+            sync_tree "${claudeConfig}/agents" "$NIX_AGENTS_DIR/claude/profiles/default/agents"
+            sync_tree "${claudeConfig}/skills" "$NIX_AGENTS_DIR/claude/profiles/default/skills"
+            sync_file "${claudeConfig}/CLAUDE.md" "$NIX_AGENTS_DIR/claude/profiles/default/CLAUDE.md"
+            sync_file "${claudeConfig}/settings.json" "$NIX_AGENTS_DIR/claude/profiles/default/settings.json"
+            sync_file "${claudeConfig}/.mcp.json" "$NIX_AGENTS_DIR/claude/profiles/default/.mcp.json"
           fi
 
           # Codex
           if [ -d "${codexConfig}" ]; then
-            echo "Syncing Codex to $DATA_DIR/nix-agents/codex..."
-            sync_tree "${codexConfig}/agents" "$DATA_DIR/nix-agents/codex/agents"
-            sync_tree "${codexConfig}/skills" "$DATA_DIR/nix-agents/codex/skills"
-            ${pkgs.coreutils}/bin/cp "${codexConfig}/AGENTS.md" "$DATA_DIR/nix-agents/codex/AGENTS.md" 2>/dev/null || true
+            echo "Syncing Codex to $NIX_AGENTS_DIR/codex/profiles/default..."
+            sync_tree "${codexConfig}/agents" "$NIX_AGENTS_DIR/codex/profiles/default/agents"
+            sync_tree "${codexConfig}/skills" "$NIX_AGENTS_DIR/codex/profiles/default/skills"
+            sync_file "${codexConfig}/AGENTS.md" "$NIX_AGENTS_DIR/codex/profiles/default/AGENTS.md"
+            sync_file "${codexConfig}/mcp.json" "$NIX_AGENTS_DIR/codex/profiles/default/mcp.json"
           fi
 
           # Pi
           if [ -d "${piConfig}" ]; then
-            echo "Syncing Pi to $HOME/.pi/agent..."
-            sync_tree "${piConfig}/agents" "$HOME/.pi/agent/agents"
-            sync_tree "${piConfig}/skills" "$HOME/.pi/agent/skills"
-            ${pkgs.coreutils}/bin/cp "${piConfig}/AGENTS.md" "$HOME/.pi/agent/AGENTS.md" 2>/dev/null || true
-            if [ -d "${piConfig}/extensions" ]; then
-              sync_tree "${piConfig}/extensions" "$HOME/.pi/agent/extensions"
-            fi
-            if [ -d "${piConfig}/prompts" ]; then
-              sync_tree "${piConfig}/prompts" "$HOME/.pi/agent/prompts"
-            fi
+            echo "Syncing Pi to $NIX_AGENTS_DIR/pi/profiles/default..."
+            sync_tree "${piConfig}/agents" "$NIX_AGENTS_DIR/pi/profiles/default/agents"
+            sync_tree "${piConfig}/skills" "$NIX_AGENTS_DIR/pi/profiles/default/skills"
+            sync_file "${piConfig}/AGENTS.md" "$NIX_AGENTS_DIR/pi/profiles/default/AGENTS.md"
+            sync_optional_tree "${piConfig}/extensions" "$NIX_AGENTS_DIR/pi/profiles/default/extensions"
+            sync_optional_tree "${piConfig}/prompts" "$NIX_AGENTS_DIR/pi/profiles/default/prompts"
           fi
 
           # Cursor
           if [ -d "${cursorConfig}" ]; then
             echo "Syncing Cursor to $HOME/.cursor..."
             ${pkgs.coreutils}/bin/mkdir -p "$HOME/.cursor/rules"
-            if [ -d "${cursorConfig}/.cursor/rules" ]; then
-              sync_tree "${cursorConfig}/.cursor/rules" "$HOME/.cursor/rules"
-            fi
+            sync_optional_tree "${cursorConfig}/.cursor/rules" "$HOME/.cursor/rules"
             ${pkgs.coreutils}/bin/cp "${cursorConfig}/.cursor/mcp.json" "$HOME/.cursor/mcp.json" 2>/dev/null || true
           fi
 
           # Amp
           if [ -d "${ampConfig}" ]; then
             echo "Syncing Amp to $CONFIG_DIR/amp..."
-            sync_tree "${ampConfig}/agents" "$CONFIG_DIR/amp/agents"
-            sync_tree "${ampConfig}/skills" "$CONFIG_DIR/amp/skills"
+            sync_optional_tree "${ampConfig}/agents" "$CONFIG_DIR/amp/agents"
+            sync_optional_tree "${ampConfig}/skills" "$CONFIG_DIR/amp/skills"
             ${pkgs.coreutils}/bin/cp "${ampConfig}/AGENTS.md" "$CONFIG_DIR/amp/AGENTS.md" 2>/dev/null || true
             ${pkgs.coreutils}/bin/cp "${ampConfig}/amp.json" "$CONFIG_DIR/amp/amp.json" 2>/dev/null || true
           fi
