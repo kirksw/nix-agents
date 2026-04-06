@@ -56,6 +56,7 @@
               # Add an MCP server
               mcpServers.my-server = {
                 type = "remote";
+                transport = "http";
                 url = "https://my-api.example.com/mcp";
               };
             }

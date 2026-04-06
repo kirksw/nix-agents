@@ -323,12 +323,17 @@ in
       # runtime based on $PWD or a .nix-agents-profile override file, and resolves
       # credentials for that profile before exec-ing the tool.
       profileMeta ? { },
+      # Optional: force a specific profile name for runtime namespacing and config
+      # selection. When set, cwd-based profile detection is skipped.
+      profile ? null,
     }:
     let
       toolBin = if target == "claude" then "${tool}/bin/claude" else "${tool}/bin/${target}";
       binName = target;
 
       hasProfiles = profileMeta != { };
+      forcedProfile = if profile != null then profile else "";
+      needsProfileSelection = hasProfiles || profile != null;
 
       # Sort all (profile, prefix) pairs by descending prefix length so that
       # the longest (most-specific) prefix matches first in the shell case.
@@ -354,23 +359,29 @@ in
         lib.mapAttrsToList (name: meta: "          ${name}) _NAX_CONFIG=${meta.storePath} ;;") profileMeta
       );
 
+      profileDetectionBlock = lib.optionalString hasProfiles ''
+        if [ -z "$_NAX_PROFILE" ]; then
+          _d="$PWD"
+          while [ "$_d" != "/" ] && [ -n "$_d" ]; do
+            if [ -f "$_d/.nix-agents-profile" ]; then
+              _NAX_PROFILE=$(cat "$_d/.nix-agents-profile")
+              break
+            fi
+            _d="''${_d%/*}"
+          done
+          if [ -z "$_NAX_PROFILE" ]; then
+            case "$PWD" in
+        ${prefixCaseArms}
+            esac
+          fi
+        fi
+      '';
+
       # Emitted at the top of the wrapper when profiles are configured.
       # Sets _NAX_CONFIG to the appropriate store path based on $PWD.
-      profileBlock = lib.optionalString hasProfiles ''
-        _NAX_PROFILE=""
-        _d="$PWD"
-        while [ "$_d" != "/" ] && [ -n "$_d" ]; do
-          if [ -f "$_d/.nix-agents-profile" ]; then
-            _NAX_PROFILE=$(cat "$_d/.nix-agents-profile")
-            break
-          fi
-          _d="''${_d%/*}"
-        done
-        if [ -z "$_NAX_PROFILE" ]; then
-          case "$PWD" in
-        ${prefixCaseArms}
-          esac
-        fi
+      profileBlock = lib.optionalString needsProfileSelection ''
+        _NAX_PROFILE="${forcedProfile}"
+        ${profileDetectionBlock}
         case "''${_NAX_PROFILE:-}" in
         ${profilePathCaseArms}
           *) _NAX_CONFIG="${agentSystem}" ;;
@@ -405,6 +416,10 @@ in
       ${profileBlock}
       ${credentialBlock}
       _NAX_HOOKS="${nixAgentsConfig}/hook-manifest"
+      _NAX_BASE_CONFIG_HOME="''${XDG_CONFIG_HOME:-$HOME/.config}"
+      _NAX_BASE_DATA_HOME="''${XDG_DATA_HOME:-$HOME/.local/share}"
+      export NAX_PROFILE="''${_NAX_PROFILE:-default}"
+      _NAX_TOOL_CONFIG_DIR="$_NAX_BASE_CONFIG_HOME/nix-agents/${target}/profiles/$NAX_PROFILE"
       export NAX_SKILL_VERSIONS="${nixAgentsConfig}/skill-versions.json"
       export NAX_WRAPPER_PID=$$
       _run_hook() {
@@ -420,32 +435,83 @@ in
       }
       trap '_run_hook session-end "{}"' EXIT
       _run_hook session-start "{}"
+      _sync_link_dir() {
+        local source_dir="$1"
+        local target_path="$2"
+        rm -rf "$target_path"
+        if [ -d "$source_dir" ]; then
+          ln -sfn "$source_dir" "$target_path"
+        fi
+      }
+      _sync_link_file() {
+        local source_file="$1"
+        local target_path="$2"
+        rm -rf "$target_path"
+        if [ -f "$source_file" ]; then
+          ln -sfn "$source_file" "$target_path"
+        fi
+      }
 
       if [ "${target}" = "opencode" ]; then
-        export OPENCODE_CONFIG="${nixAgentsConfig}/opencode.json"
-        export OPENCODE_CONFIG_DIR="${nixAgentsConfig}"
+        mkdir -p "$_NAX_TOOL_CONFIG_DIR"
+        _sync_link_dir "${nixAgentsConfig}/agents" "$_NAX_TOOL_CONFIG_DIR/agents"
+        _sync_link_dir "${nixAgentsConfig}/skills" "$_NAX_TOOL_CONFIG_DIR/skills"
+        _sync_link_file "${nixAgentsConfig}/AGENTS.md" "$_NAX_TOOL_CONFIG_DIR/AGENTS.md"
+        _sync_link_file "${nixAgentsConfig}/opencode.json" "$_NAX_TOOL_CONFIG_DIR/opencode.json"
+        if [ -n "''${_NAX_PROFILE:-}" ]; then
+          export XDG_CONFIG_HOME="$_NAX_BASE_CONFIG_HOME/opencode/profiles/$_NAX_PROFILE"
+          export XDG_DATA_HOME="$_NAX_BASE_DATA_HOME/opencode/profiles/$_NAX_PROFILE"
+          mkdir -p "$XDG_CONFIG_HOME" "$XDG_DATA_HOME"
+        fi
+        export OPENCODE_CONFIG="$_NAX_TOOL_CONFIG_DIR/opencode.json"
+        export OPENCODE_CONFIG_DIR="$_NAX_TOOL_CONFIG_DIR"
         export OPENCODE_CONFIG_CONTENT='{"autoupdate":false}'
       fi
 
       if [ "${target}" = "claude" ]; then
-        _nix_agents_dir="''${XDG_DATA_HOME:-$HOME/.local/share}/nix-agents/claude"
+        _nix_agents_dir="$_NAX_BASE_CONFIG_HOME/nix-agents/claude/profiles/$NAX_PROFILE"
         mkdir -p "$_nix_agents_dir"
-        ln -sfn "${nixAgentsConfig}/agents" "$_nix_agents_dir/agents"
-        ln -sfn "${nixAgentsConfig}/skills" "$_nix_agents_dir/skills"
-        [ -f "${nixAgentsConfig}/CLAUDE.md" ] && ln -sfn "${nixAgentsConfig}/CLAUDE.md" "$_nix_agents_dir/CLAUDE.md"
+        _sync_link_dir "${nixAgentsConfig}/agents" "$_nix_agents_dir/agents"
+        _sync_link_dir "${nixAgentsConfig}/skills" "$_nix_agents_dir/skills"
+        _sync_link_file "${nixAgentsConfig}/CLAUDE.md" "$_nix_agents_dir/CLAUDE.md"
+        _sync_link_file "${nixAgentsConfig}/settings.json" "$_nix_agents_dir/settings.json"
+        _sync_link_file "${nixAgentsConfig}/.mcp.json" "$_nix_agents_dir/.mcp.json"
         export CLAUDE_CONFIG_DIR="$_nix_agents_dir"
-        set -- --settings "${nixAgentsConfig}/settings.json" "$@"
-        [ -f "${nixAgentsConfig}/.mcp.json" ] && set -- --mcp-config "${nixAgentsConfig}/.mcp.json" "$@"
+        set -- --settings "$_nix_agents_dir/settings.json" "$@"
+        [ -f "$_nix_agents_dir/.mcp.json" ] && set -- --mcp-config "$_nix_agents_dir/.mcp.json" "$@"
         exec "${toolBin}" "$@"
       fi
 
       if [ "${target}" = "codex" ]; then
-        _nix_agents_dir="''${XDG_DATA_HOME:-$HOME/.local/share}/nix-agents/codex"
+        _nix_agents_dir="$_NAX_BASE_CONFIG_HOME/nix-agents/codex/profiles/$NAX_PROFILE"
         mkdir -p "$_nix_agents_dir"
-        ln -sfn "${nixAgentsConfig}/agents" "$_nix_agents_dir/agents"
-        ln -sfn "${nixAgentsConfig}/skills" "$_nix_agents_dir/skills"
-        [ -f "${nixAgentsConfig}/AGENTS.md" ] && ln -sfn "${nixAgentsConfig}/AGENTS.md" "$_nix_agents_dir/AGENTS.md"
+        _sync_link_dir "${nixAgentsConfig}/agents" "$_nix_agents_dir/agents"
+        _sync_link_dir "${nixAgentsConfig}/skills" "$_nix_agents_dir/skills"
+        _sync_link_file "${nixAgentsConfig}/AGENTS.md" "$_nix_agents_dir/AGENTS.md"
+        _sync_link_file "${nixAgentsConfig}/mcp.json" "$_nix_agents_dir/mcp.json"
         export CODEX_CONFIG_DIR="$_nix_agents_dir"
+        exec "${toolBin}" "$@"
+      fi
+
+      if [ "${target}" = "pi" ]; then
+        _nix_agents_dir="$_NAX_BASE_CONFIG_HOME/nix-agents/pi/profiles/$NAX_PROFILE"
+        _pi_agent_dir="$HOME/.pi/agent"
+        mkdir -p "$_nix_agents_dir" "$_pi_agent_dir"
+        _sync_link_dir "${nixAgentsConfig}/agents" "$_nix_agents_dir/agents"
+        _sync_link_dir "${nixAgentsConfig}/skills" "$_nix_agents_dir/skills"
+        _sync_link_file "${nixAgentsConfig}/AGENTS.md" "$_nix_agents_dir/AGENTS.md"
+        _sync_link_dir "${nixAgentsConfig}/extensions" "$_nix_agents_dir/extensions"
+        _sync_link_dir "${nixAgentsConfig}/prompts" "$_nix_agents_dir/prompts"
+        _sync_link_dir "$_nix_agents_dir/agents" "$_pi_agent_dir/agents"
+        _sync_link_dir "$_nix_agents_dir/skills" "$_pi_agent_dir/skills"
+        _sync_link_file "$_nix_agents_dir/AGENTS.md" "$_pi_agent_dir/AGENTS.md"
+        _sync_link_dir "$_nix_agents_dir/extensions" "$_pi_agent_dir/extensions"
+        _sync_link_dir "$_nix_agents_dir/prompts" "$_pi_agent_dir/prompts"
+        if [ -n "''${_NAX_PROFILE:-}" ]; then
+          export XDG_CONFIG_HOME="$_NAX_BASE_CONFIG_HOME/pi/profiles/$_NAX_PROFILE"
+          export XDG_DATA_HOME="$_NAX_BASE_DATA_HOME/pi/profiles/$_NAX_PROFILE"
+          mkdir -p "$XDG_CONFIG_HOME" "$XDG_DATA_HOME"
+        fi
         exec "${toolBin}" "$@"
       fi
 

@@ -206,6 +206,15 @@ let
         type = types.nullOr types.str;
         default = null;
       };
+      transport = mkOption {
+        type = types.nullOr (
+          types.enum [
+            "sse"
+            "http"
+          ]
+        );
+        default = null;
+      };
       headers = mkOption {
         type = types.attrsOf types.str;
         default = { };

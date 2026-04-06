@@ -1,6 +1,6 @@
 # nix-agents
 
-Composable LLM agent teams as Nix derivations. Define your agent graph once, generate configs for OpenCode, Claude Code, and Codex from a single source of truth.
+Composable LLM agent teams as Nix derivations. Define your agent graph once, generate configs for OpenCode, Claude Code, Codex, and Pi from a single source of truth.
 
 ## Quick start
 
@@ -11,11 +11,13 @@ Composable LLM agent teams as Nix derivations. Define your agent graph once, gen
 nix run github:kirksw/nix-agents#opencode
 nix run github:kirksw/nix-agents#claude
 nix run github:kirksw/nix-agents#codex
+nix run github:kirksw/nix-agents#pi
 
 # Build config directories only
 nix build github:kirksw/nix-agents#opencode-config
 nix build github:kirksw/nix-agents#claude-config
 nix build github:kirksw/nix-agents#codex-config
+nix build github:kirksw/nix-agents#pi-config
 ```
 
 ### Create a custom agent team
@@ -56,6 +58,12 @@ This scaffolds a flake that imports the default preset and lets you add agents, 
     );
 }
 ```
+
+`mkWrappedTool` also accepts `profile = "<name>"` to force a specific runtime profile namespace.
+When a profile is selected or forced, generated agent assets are projected into
+`~/.config/nix-agents/<tool>/profiles/<profile>`. Tools that keep native runtime state, such as
+OpenCode and Pi, still keep their own tool-specific XDG profile directories alongside that
+canonical `nix-agents` asset root.
 
 ## Built-in agents
 
