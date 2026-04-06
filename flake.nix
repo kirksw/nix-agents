@@ -204,6 +204,12 @@
             tool = agentPkgs.codex;
             agentSystem = codexConfig;
           };
+          pi = library.mkWrappedTool {
+            inherit pkgs;
+            target = "pi";
+            tool = piCodingAgent;
+            agentSystem = piConfig;
+          };
           cursor-config = cursorConfig;
           amp-config = ampConfig;
           pi-coding-agent = piCodingAgent;
@@ -390,6 +396,52 @@
               }
             }/bin/codex
             test -d ${codexConfig}/agents
+            touch $out
+          '';
+
+          wrapper-smoke-profile-paths = pkgs.runCommand "wrapper-smoke-profile-paths" { } ''
+            opencode_wrapper=${
+              library.mkWrappedTool {
+                inherit pkgs;
+                target = "opencode";
+                tool = agentPkgs.opencode;
+                agentSystem = opencodeConfig;
+                profile = "work";
+              }
+            }/bin/opencode
+            claude_wrapper=${
+              library.mkWrappedTool {
+                inherit pkgs;
+                target = "claude";
+                tool = agentPkgs.claude-code;
+                agentSystem = claudeConfig;
+                profile = "work";
+              }
+            }/bin/claude
+            codex_wrapper=${
+              library.mkWrappedTool {
+                inherit pkgs;
+                target = "codex";
+                tool = agentPkgs.codex;
+                agentSystem = codexConfig;
+                profile = "work";
+              }
+            }/bin/codex
+            pi_wrapper=${
+              library.mkWrappedTool {
+                inherit pkgs;
+                target = "pi";
+                tool = piCodingAgent;
+                agentSystem = piConfig;
+                profile = "work";
+              }
+            }/bin/pi
+
+            grep -q 'opencode/profiles/\$_NAX_PROFILE' "$opencode_wrapper"
+            grep -q 'nix-agents/claude\$_NAX_PROFILE_SUFFIX' "$claude_wrapper"
+            grep -q 'nix-agents/codex\$_NAX_PROFILE_SUFFIX' "$codex_wrapper"
+            grep -q 'nix-agents/pi\$_NAX_PROFILE_SUFFIX' "$pi_wrapper"
+            grep -q '\$HOME/.pi/agent' "$pi_wrapper"
             touch $out
           '';
 

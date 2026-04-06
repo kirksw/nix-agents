@@ -40,6 +40,19 @@
     touch $out
   '';
 
+  # Generated Markdown agents must include a name field for Pi subagent discovery
+  eval-agent-frontmatter-name = pkgs.runCommand "eval-agent-frontmatter-name" { } ''
+    ok=1
+    for agent in ${opencodeConfig}/agents/*.md; do
+      if ! grep -q '^name: ' "$agent"; then
+        echo "FAIL: Missing name field in agent frontmatter: $agent" >&2
+        ok=0
+      fi
+    done
+    [ "$ok" = "1" ] || exit 1
+    touch $out
+  '';
+
   # opencode.json must be valid JSON with an mcp key
   eval-opencode-json = pkgs.runCommand "eval-opencode-json" { nativeBuildInputs = [ pkgs.jq ]; } ''
     jq -e '.mcp' ${opencodeConfig}/opencode.json > /dev/null \

@@ -53,9 +53,10 @@ let
       );
 
   renderFrontmatter =
-    agent:
+    name: agent:
     let
       lines = [
+        "name: ${name}"
         "description: ${agent.description}"
         "mode: ${agent.mode}"
         "model: ${resolveModel agent.model}"
@@ -73,9 +74,7 @@ let
     in
     "---\n${lib.concatStringsSep "\n" lines}\n---";
 
-  agentsOutput = lib.mapAttrs (
-    name: agent: (renderFrontmatter agent) + "\n" + preamble + agent.prompt + "\n"
-  ) config.agents;
+  agentsOutput = lib.mapAttrs (name: agent: renderFrontmatter name agent + "\n" + preamble + agent.prompt + "\n") config.agents;
 
   skillSkel = lib.mapAttrs (
     name: skill:

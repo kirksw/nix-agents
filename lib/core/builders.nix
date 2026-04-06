@@ -323,12 +323,17 @@ in
       # runtime based on $PWD or a .nix-agents-profile override file, and resolves
       # credentials for that profile before exec-ing the tool.
       profileMeta ? { },
+      # Optional: force a specific profile name for runtime namespacing and config
+      # selection. When set, cwd-based profile detection is skipped.
+      profile ? null,
     }:
     let
       toolBin = if target == "claude" then "${tool}/bin/claude" else "${tool}/bin/${target}";
       binName = target;
 
       hasProfiles = profileMeta != { };
+      forcedProfile = if profile != null then profile else "";
+      needsProfileSelection = hasProfiles || profile != null;
 
       # Sort all (profile, prefix) pairs by descending prefix length so that
       # the longest (most-specific) prefix matches first in the shell case.
@@ -354,23 +359,29 @@ in
         lib.mapAttrsToList (name: meta: "          ${name}) _NAX_CONFIG=${meta.storePath} ;;") profileMeta
       );
 
+      profileDetectionBlock = lib.optionalString hasProfiles ''
+        if [ -z "$_NAX_PROFILE" ]; then
+          _d="$PWD"
+          while [ "$_d" != "/" ] && [ -n "$_d" ]; do
+            if [ -f "$_d/.nix-agents-profile" ]; then
+              _NAX_PROFILE=$(cat "$_d/.nix-agents-profile")
+              break
+            fi
+            _d="''${_d%/*}"
+          done
+          if [ -z "$_NAX_PROFILE" ]; then
+            case "$PWD" in
+        ${prefixCaseArms}
+            esac
+          fi
+        fi
+      '';
+
       # Emitted at the top of the wrapper when profiles are configured.
       # Sets _NAX_CONFIG to the appropriate store path based on $PWD.
-      profileBlock = lib.optionalString hasProfiles ''
-        _NAX_PROFILE=""
-        _d="$PWD"
-        while [ "$_d" != "/" ] && [ -n "$_d" ]; do
-          if [ -f "$_d/.nix-agents-profile" ]; then
-            _NAX_PROFILE=$(cat "$_d/.nix-agents-profile")
-            break
-          fi
-          _d="''${_d%/*}"
-        done
-        if [ -z "$_NAX_PROFILE" ]; then
-          case "$PWD" in
-        ${prefixCaseArms}
-          esac
-        fi
+      profileBlock = lib.optionalString needsProfileSelection ''
+        _NAX_PROFILE="${forcedProfile}"
+        ${profileDetectionBlock}
         case "''${_NAX_PROFILE:-}" in
         ${profilePathCaseArms}
           *) _NAX_CONFIG="${agentSystem}" ;;
@@ -405,6 +416,13 @@ in
       ${profileBlock}
       ${credentialBlock}
       _NAX_HOOKS="${nixAgentsConfig}/hook-manifest"
+      _NAX_BASE_CONFIG_HOME="''${XDG_CONFIG_HOME:-$HOME/.config}"
+      _NAX_BASE_DATA_HOME="''${XDG_DATA_HOME:-$HOME/.local/share}"
+      export NAX_PROFILE="''${_NAX_PROFILE:-default}"
+      _NAX_PROFILE_SUFFIX=""
+      if [ -n "''${_NAX_PROFILE:-}" ]; then
+        _NAX_PROFILE_SUFFIX="/profiles/$_NAX_PROFILE"
+      fi
       export NAX_SKILL_VERSIONS="${nixAgentsConfig}/skill-versions.json"
       export NAX_WRAPPER_PID=$$
       _run_hook() {
@@ -422,13 +440,18 @@ in
       _run_hook session-start "{}"
 
       if [ "${target}" = "opencode" ]; then
+        if [ -n "''${_NAX_PROFILE:-}" ]; then
+          export XDG_CONFIG_HOME="$_NAX_BASE_CONFIG_HOME/opencode/profiles/$_NAX_PROFILE"
+          export XDG_DATA_HOME="$_NAX_BASE_DATA_HOME/opencode/profiles/$_NAX_PROFILE"
+          mkdir -p "$XDG_CONFIG_HOME" "$XDG_DATA_HOME"
+        fi
         export OPENCODE_CONFIG="${nixAgentsConfig}/opencode.json"
         export OPENCODE_CONFIG_DIR="${nixAgentsConfig}"
         export OPENCODE_CONFIG_CONTENT='{"autoupdate":false}'
       fi
 
       if [ "${target}" = "claude" ]; then
-        _nix_agents_dir="''${XDG_DATA_HOME:-$HOME/.local/share}/nix-agents/claude"
+        _nix_agents_dir="$_NAX_BASE_DATA_HOME/nix-agents/claude$_NAX_PROFILE_SUFFIX"
         mkdir -p "$_nix_agents_dir"
         ln -sfn "${nixAgentsConfig}/agents" "$_nix_agents_dir/agents"
         ln -sfn "${nixAgentsConfig}/skills" "$_nix_agents_dir/skills"
@@ -440,12 +463,34 @@ in
       fi
 
       if [ "${target}" = "codex" ]; then
-        _nix_agents_dir="''${XDG_DATA_HOME:-$HOME/.local/share}/nix-agents/codex"
+        _nix_agents_dir="$_NAX_BASE_DATA_HOME/nix-agents/codex$_NAX_PROFILE_SUFFIX"
         mkdir -p "$_nix_agents_dir"
         ln -sfn "${nixAgentsConfig}/agents" "$_nix_agents_dir/agents"
         ln -sfn "${nixAgentsConfig}/skills" "$_nix_agents_dir/skills"
         [ -f "${nixAgentsConfig}/AGENTS.md" ] && ln -sfn "${nixAgentsConfig}/AGENTS.md" "$_nix_agents_dir/AGENTS.md"
         export CODEX_CONFIG_DIR="$_nix_agents_dir"
+        exec "${toolBin}" "$@"
+      fi
+
+      if [ "${target}" = "pi" ]; then
+        _nix_agents_dir="$_NAX_BASE_DATA_HOME/nix-agents/pi$_NAX_PROFILE_SUFFIX"
+        _pi_agent_dir="$HOME/.pi/agent"
+        mkdir -p "$_nix_agents_dir" "$_pi_agent_dir"
+        ln -sfn "${nixAgentsConfig}/agents" "$_nix_agents_dir/agents"
+        ln -sfn "${nixAgentsConfig}/skills" "$_nix_agents_dir/skills"
+        [ -f "${nixAgentsConfig}/AGENTS.md" ] && ln -sfn "${nixAgentsConfig}/AGENTS.md" "$_nix_agents_dir/AGENTS.md"
+        [ -d "${nixAgentsConfig}/extensions" ] && ln -sfn "${nixAgentsConfig}/extensions" "$_nix_agents_dir/extensions"
+        [ -d "${nixAgentsConfig}/prompts" ] && ln -sfn "${nixAgentsConfig}/prompts" "$_nix_agents_dir/prompts"
+        ln -sfn "$_nix_agents_dir/agents" "$_pi_agent_dir/agents"
+        ln -sfn "$_nix_agents_dir/skills" "$_pi_agent_dir/skills"
+        [ -f "$_nix_agents_dir/AGENTS.md" ] && ln -sfn "$_nix_agents_dir/AGENTS.md" "$_pi_agent_dir/AGENTS.md"
+        [ -d "$_nix_agents_dir/extensions" ] && ln -sfn "$_nix_agents_dir/extensions" "$_pi_agent_dir/extensions"
+        [ -d "$_nix_agents_dir/prompts" ] && ln -sfn "$_nix_agents_dir/prompts" "$_pi_agent_dir/prompts"
+        if [ -n "''${_NAX_PROFILE:-}" ]; then
+          export XDG_CONFIG_HOME="$_NAX_BASE_CONFIG_HOME/pi/profiles/$_NAX_PROFILE"
+          export XDG_DATA_HOME="$_NAX_BASE_DATA_HOME/pi/profiles/$_NAX_PROFILE"
+          mkdir -p "$XDG_CONFIG_HOME" "$XDG_DATA_HOME"
+        fi
         exec "${toolBin}" "$@"
       fi
 
