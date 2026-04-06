@@ -22,16 +22,16 @@ export function queryInsights(db: DatabaseSync, opts: InsightsOptions = {}): Ins
     'SELECT skill_name, skill_version, profile, sessions_n, commits_n FROM skill_efficacy ORDER BY skill_name, skill_version'
   ).all() as { skill_name: string; skill_version: string | null; profile: string; sessions_n: number; commits_n: number }[];
 
-  // Group by (skill_name, profile)
+  // Group by (skill_name, profile) — use JSON tuple keys to avoid delimiter collisions
   const bySkillProfile = new Map<string, typeof efficacyRows>();
   for (const row of efficacyRows) {
-    const key = row.skill_name + '\x00' + row.profile;
-    const existing = bySkillProfile.get(key) ?? [];
+    const mapKey = JSON.stringify([row.skill_name, row.profile]);
+    const existing = bySkillProfile.get(mapKey) ?? [];
     existing.push(row);
-    bySkillProfile.set(key, existing);
+    bySkillProfile.set(mapKey, existing);
   }
 
-  for (const [key, rows] of bySkillProfile) {
+  for (const [mapKey, rows] of bySkillProfile) {
     // Need at least 2 versions each with enough sessions
     const qualified = rows.filter(r => r.sessions_n >= minSessions);
     if (qualified.length < 2) continue;
@@ -55,9 +55,7 @@ export function queryInsights(db: DatabaseSync, opts: InsightsOptions = {}): Ins
     // Flag if latest is >20% lower than previous
     if (prevRate > 0 && latestRate < prevRate * 0.8) {
       const pctDrop = Math.round((1 - latestRate / prevRate) * 100);
-      const parts = key.split('\x00');
-      const skillName = parts[0];
-      const profile = parts[1];
+      const [skillName, profile] = JSON.parse(mapKey) as [string, string];
       insights.push({
         type: 'skill-regression',
         subject: skillName,

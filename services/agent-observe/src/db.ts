@@ -37,7 +37,7 @@ export function initDb(): void {
     );
     CREATE TABLE IF NOT EXISTS skill_efficacy (
       skill_name    TEXT NOT NULL,
-      skill_version TEXT,
+      skill_version TEXT NOT NULL DEFAULT 'unversioned',
       profile       TEXT NOT NULL DEFAULT 'default',
       sessions_n    INTEGER NOT NULL DEFAULT 0,
       commits_n     INTEGER NOT NULL DEFAULT 0,
@@ -129,7 +129,8 @@ export function recomputeEfficacy(): void {
     }
 
     // Aggregate per (skill_name, skill_version, profile)
-    const efficacy = new Map<string, { sessions_n: number; commits_n: number; total_sec: number }>();
+    type EfficacyKey = [skillName: string, skillVersion: string, profile: string];
+    const efficacy = new Map<string, { key: EfficacyKey; sessions_n: number; commits_n: number; total_sec: number }>();
     for (const session of sessions) {
       let versions: Record<string, string>;
       try {
@@ -140,12 +141,13 @@ export function recomputeEfficacy(): void {
       const commits = commitCounts.get(session.id) ?? 0;
       const dur = session.duration_sec ?? 0;
       for (const [skillName, skillVersion] of Object.entries(versions)) {
-        const key = skillName + '\x00' + skillVersion + '\x00' + session.profile;
-        const existing = efficacy.get(key) ?? { sessions_n: 0, commits_n: 0, total_sec: 0 };
+        const key: EfficacyKey = [skillName, skillVersion ?? 'unversioned', session.profile];
+        const mapKey = JSON.stringify(key);
+        const existing = efficacy.get(mapKey) ?? { key, sessions_n: 0, commits_n: 0, total_sec: 0 };
         existing.sessions_n++;
         existing.commits_n += commits;
         existing.total_sec += dur;
-        efficacy.set(key, existing);
+        efficacy.set(mapKey, existing);
       }
     }
 
@@ -153,9 +155,8 @@ export function recomputeEfficacy(): void {
       INSERT INTO skill_efficacy (skill_name, skill_version, profile, sessions_n, commits_n, total_sec, last_updated)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
-    for (const [key, stats] of efficacy) {
-      const parts = key.split('\x00');
-      insertEfficacy.run(parts[0], parts[1], parts[2], stats.sessions_n, stats.commits_n, stats.total_sec, now);
+    for (const { key, ...stats } of efficacy.values()) {
+      insertEfficacy.run(key[0], key[1], key[2], stats.sessions_n, stats.commits_n, stats.total_sec, now);
     }
 
     // Rebuild agent_usage from delegation events
@@ -165,7 +166,8 @@ export function recomputeEfficacy(): void {
       "SELECT e.data, s.profile FROM events e JOIN sessions s ON e.session_id = s.id WHERE e.event = 'delegation'"
     ).all() as { data: string; profile: string }[];
 
-    const agentUsage = new Map<string, { delegated_n: number }>();
+    type AgentKey = [agentName: string, profile: string];
+    const agentUsage = new Map<string, { key: AgentKey; delegated_n: number }>();
     for (const row of delegationRows) {
       let data: Record<string, unknown>;
       try {
@@ -175,10 +177,11 @@ export function recomputeEfficacy(): void {
       }
       const toAgent = data['to_agent'] as string | undefined;
       if (!toAgent) continue;
-      const key = toAgent + '\x00' + row.profile;
-      const existing = agentUsage.get(key) ?? { delegated_n: 0 };
+      const key: AgentKey = [toAgent, row.profile];
+      const mapKey = JSON.stringify(key);
+      const existing = agentUsage.get(mapKey) ?? { key, delegated_n: 0 };
       existing.delegated_n++;
-      agentUsage.set(key, existing);
+      agentUsage.set(mapKey, existing);
     }
 
     // sessions_n per profile for ratio computation
@@ -194,10 +197,9 @@ export function recomputeEfficacy(): void {
       INSERT INTO agent_usage (agent_name, profile, sessions_n, delegated_n, last_updated)
       VALUES (?, ?, ?, ?, ?)
     `);
-    for (const [key, stats] of agentUsage) {
-      const parts = key.split('\x00');
-      const sessionsN = sessionsByProfile.get(parts[1]) ?? 0;
-      insertAgent.run(parts[0], parts[1], sessionsN, stats.delegated_n, now);
+    for (const { key, ...stats } of agentUsage.values()) {
+      const sessionsN = sessionsByProfile.get(key[1]) ?? 0;
+      insertAgent.run(key[0], key[1], sessionsN, stats.delegated_n, now);
     }
 
     db.exec('COMMIT');

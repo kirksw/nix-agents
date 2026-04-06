@@ -26,7 +26,7 @@ fi
 
 echo ""
 echo "==> Updating llm-agents flake input..."
-if nix flake update llm-agents --flake "$REPO_ROOT" 2>&1; then
+if nix flake update --flake "$REPO_ROOT" llm-agents 2>&1; then
   # Check if flake.lock changed
   if git -C "$REPO_ROOT" diff --quiet flake.lock 2>/dev/null; then
     echo "  llm-agents: already up to date"
