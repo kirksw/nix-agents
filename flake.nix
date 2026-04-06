@@ -306,6 +306,9 @@
                 check-jsonschema \
                   --schemafile ${./lib/schemas/claude-code-settings.json} \
                   ${claudeConfig}/settings.json
+                check-jsonschema \
+                  --schemafile ${./lib/schemas/claude-code-mcp.json} \
+                  ${claudeConfig}/.mcp.json
                 touch $out
               '';
 

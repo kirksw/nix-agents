@@ -131,17 +131,25 @@ let
     name: server: server.type == "remote" || (resolveCommand name server) != [ ]
   ) config.mcpServers;
 
+  renderLocalMcp =
+    command:
+    {
+      command = builtins.head command;
+      args = lib.tail command;
+      env = { };
+    };
+
   mcpEntries = lib.mapAttrs (
     name: server:
     if server.type == "remote" then
       {
-        type = "url";
+        type = if server.transport != null then server.transport else "http";
         inherit (server) url;
         inherit (server) headers;
       }
     else
-      {
-        command = resolveCommand name server;
+      (renderLocalMcp (resolveCommand name server))
+      // {
         env = server.environment;
       }
   ) enabledServers;
