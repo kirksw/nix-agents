@@ -24,11 +24,7 @@
       {
         skills.my-skill = {
           description = "One line — used as trigger description and shown in skill listings.";
-          content = ''
-            # My Skill
-
-            Markdown body loaded when the skill triggers.
-          '';
+          content = "# My Skill\n\nMarkdown body loaded when the skill triggers.";
           resources = { };   # attrset of name -> path for bundled files
           src = null;        # set to a path to use a pre-built SKILL.md directory
         };
@@ -45,7 +41,7 @@
           model = "balanced";       # fast | balanced | powerful | reasoning | literal string
           mode = "subagent";        # subagent | primary
           temperature = 0.2;
-          prompt = ''…'';
+          prompt = "Implement the task.";
           delegatesTo = [ "other-agent" ];
           skills = [ "skill-name" ];
           mcpServers = [ "server-name" ];
