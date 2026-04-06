@@ -1,5 +1,4 @@
-{ ... }:
-{
+_: {
   profiles = {
     # personal — activated for ~/src/ and ~/projects/ paths.
     # All agents and skills available; use reasoning model for architecture tasks.

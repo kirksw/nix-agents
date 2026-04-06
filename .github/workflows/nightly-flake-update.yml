@@ -1,0 +1,69 @@
+name: Nightly Flake Update
+
+on:
+  schedule:
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: nightly-flake-update
+  cancel-in-progress: false
+
+jobs:
+  update-flake:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Warn when automation token is missing
+        if: ${{ secrets.NIX_AGENTS_AUTOMATION_TOKEN == '' }}
+        run: |
+          echo "::warning::NIX_AGENTS_AUTOMATION_TOKEN is not set."
+          echo "::warning::The workflow will fall back to GITHUB_TOKEN, which will not trigger pull_request CI for the generated PR."
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Enable Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Update flake inputs
+        run: nix flake update
+
+      - name: Validate updated flake
+        run: nix flake check
+
+      - name: Create pull request
+        id: create-pull-request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.NIX_AGENTS_AUTOMATION_TOKEN || github.token }}
+          branch: automation/nightly-flake-update
+          base: main
+          commit-message: "chore: update flake.lock"
+          title: "chore: nightly flake input update"
+          body: |
+            Automated nightly refresh of `flake.lock`.
+
+            - runs `nix flake update`
+            - validates the result with `nix flake check`
+            - enables auto-merge once PR checks pass
+          add-paths: |
+            flake.lock
+          delete-branch: true
+
+      - name: Enable auto-merge
+        if: ${{ steps.create-pull-request.outputs.pull-request-number && secrets.NIX_AGENTS_AUTOMATION_TOKEN != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.NIX_AGENTS_AUTOMATION_TOKEN }}
+        run: |
+          gh pr merge \
+            --auto \
+            --squash \
+            "${{ steps.create-pull-request.outputs.pull-request-number }}"

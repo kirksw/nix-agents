@@ -9,7 +9,8 @@ let
   shared = import ./shared.nix { inherit lib; };
   preamble = shared.mkHumanPreamble config.human;
 
-  workflowGuide = if src != null then builtins.readFile "${src}/AGENTS.md" else "";
+  workflowGuide =
+    if src != null then builtins.unsafeDiscardStringContext (builtins.readFile (src + "/AGENTS.md")) else "";
 
   generatorDefaults = {
     fast = "anthropic/claude-haiku-4-5-20251001";

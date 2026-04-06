@@ -32,7 +32,7 @@
         agents.my-agent = {
           description = "…";
           model = "balanced";
-          prompt = ''…'';
+          prompt = "Implement the task.";
         };
       }
       ```

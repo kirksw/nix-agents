@@ -73,7 +73,7 @@
       inputs.nix-agents.url = "github:kirksw/nix-agents";
 
       # in outputs:
-      packages.my-config = nix-agents.lib.${system}.mkAgentSystem {
+      packages.my-config = nix-agents.lib.''${system}.mkAgentSystem {
         inherit pkgs;
         modules = [ nix-agents.presets.default ./my-agent.nix ];
         target = "opencode";
