@@ -354,6 +354,7 @@
       3. Identify how SKILL.md or bundled resources should be updated
       4. Implement changes and test again
     '';
+    version = "1.0.0";
     resources = { };
     src = null;
   };

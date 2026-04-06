@@ -118,6 +118,7 @@
       }
       ```
     '';
+    version = "1.0.0";
     resources = { };
     src = null;
   };

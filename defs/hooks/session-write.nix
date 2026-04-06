@@ -13,11 +13,13 @@
         mkdir -p "$SESSION_DIR"
         SESSION_FILE="$SESSION_DIR/$(date -u +%Y-%m-%dT%H-%M-%S).json"
         SESSION_ID="$(uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid 2>/dev/null || echo "$(date +%s)-$$")"
+        SKILL_VERSIONS="$(cat "''${NAX_SKILL_VERSIONS:-/dev/null}" 2>/dev/null || echo '{}')"
         jq -n \
           --arg id "$SESSION_ID" \
           --arg profile "''${NAX_PROFILE:-default}" \
           --arg project "$PWD" \
           --arg ts "$(date -u +%FT%TZ)" \
+          --argjson skillVersions "$SKILL_VERSIONS" \
           '{
             version: 1,
             sessionId: $id,
@@ -29,22 +31,22 @@
             lastCommit: null,
             durationSec: null,
             tokenUsage: null,
+            skillVersions: $skillVersions,
             accomplished: [],
             incomplete: [],
             events: []
           }' > "$SESSION_FILE"
-        _NAX_STATE_DIR="''${TMPDIR:-/tmp}/nax-$$"
+        _NAX_STATE_DIR="''${XDG_DATA_HOME:-$HOME/.local/share}/nix-agents/state/''${NAX_WRAPPER_PID:-$$}"
         mkdir -p "$_NAX_STATE_DIR"
         echo "$SESSION_FILE" > "$_NAX_STATE_DIR/current-session"
         echo "$SESSION_ID" > "$_NAX_STATE_DIR/session-id"
-        export NAX_STATE_DIR="$_NAX_STATE_DIR"
       '';
     }
     {
       event = "session-end";
       package = pkgs.jq;
       command = ''
-        SESSION_FILE="$(cat "''${NAX_STATE_DIR:-/tmp/nax-$$}/current-session" 2>/dev/null)"
+        SESSION_FILE="$(cat "''${XDG_DATA_HOME:-$HOME/.local/share}/nix-agents/state/''${NAX_WRAPPER_PID:-$$}/current-session" 2>/dev/null)"
         if [ -z "$SESSION_FILE" ] || [ ! -f "$SESSION_FILE" ]; then exit 0; fi
         BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
         COMMIT="$(git rev-parse --short HEAD 2>/dev/null)"
@@ -58,7 +60,7 @@
           --argjson dur "$DURATION" \
           '.endedAt = $end | .branch = $branch | .lastCommit = $commit | .durationSec = $dur' \
           "$SESSION_FILE" > "$SESSION_FILE.tmp" && mv "$SESSION_FILE.tmp" "$SESSION_FILE"
-        rm -rf "''${NAX_STATE_DIR:-/tmp/nax-$$}"
+        rm -rf "''${XDG_DATA_HOME:-$HOME/.local/share}/nix-agents/state/''${NAX_WRAPPER_PID:-$$}"
       '';
     }
   ];
