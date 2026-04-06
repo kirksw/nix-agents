@@ -137,7 +137,10 @@ let
 
       skillContent =
         name: skill:
-        if skill.src != null then builtins.readFile (skill.src + "/SKILL.md") else skill.content;
+        if skill.src != null then
+          builtins.unsafeDiscardStringContext (builtins.readFile (skill.src + "/SKILL.md"))
+        else
+          skill.content;
 
       writeSkill = name: content: ''
         mkdir -p "$out/skills/${name}"
