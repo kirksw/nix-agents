@@ -21,7 +21,10 @@
         pkgs = import nixpkgs { inherit system; };
         agentPkgs = llm-agents.packages.${system};
         library = import ./lib/default.nix { inherit (pkgs) lib; };
-        defaultModules = [ ./presets/default.nix ];
+        defaultModules = [
+          ./presets/default.nix
+          ./presets/profiles.nix
+        ];
 
         mkConfig =
           target:
@@ -44,6 +47,28 @@
         piConfig = mkConfigWithSrc "pi";
         cursorConfig = mkConfig "cursor";
         ampConfig = mkConfig "amp";
+        opencodeProfileMeta = library.mkProfileMeta {
+          inherit pkgs;
+          modules = defaultModules;
+          target = "opencode";
+          src = ./.;
+        };
+        claudeProfileMeta = library.mkProfileMeta {
+          inherit pkgs;
+          modules = defaultModules;
+          target = "claude";
+        };
+        codexProfileMeta = library.mkProfileMeta {
+          inherit pkgs;
+          modules = defaultModules;
+          target = "codex";
+        };
+        piProfileMeta = library.mkProfileMeta {
+          inherit pkgs;
+          modules = defaultModules;
+          target = "pi";
+          src = ./.;
+        };
 
         piCodingAgent = pkgs.callPackage ./targets/pi/package { };
 
@@ -91,6 +116,40 @@
           nix build ${pkgs.lib.concatStringsSep " " (map (name: ".#checks.${system}.${name}") evalCheckNames)}
           echo "All evals passed."
         '';
+
+        mkProfileSyncBlock =
+          {
+            label,
+            targetName,
+            defaultConfig,
+            profileMeta,
+            files,
+            optionalTrees ? [ ],
+          }:
+          let
+            renderOne =
+              profileName: storePath:
+              ''
+                if [ -d "${storePath}" ]; then
+                  echo "Syncing ${label} to $NIX_AGENTS_DIR/${targetName}/profiles/${profileName}..."
+                  sync_tree "${storePath}/agents" "$NIX_AGENTS_DIR/${targetName}/profiles/${profileName}/agents"
+                  sync_tree "${storePath}/skills" "$NIX_AGENTS_DIR/${targetName}/profiles/${profileName}/skills"
+                  ${pkgs.lib.concatMapStringsSep "\n" (
+                    file:
+                    ''sync_file "${storePath}/${file.source}" "$NIX_AGENTS_DIR/${targetName}/profiles/${profileName}/${file.target}"''
+                  ) files}
+                  ${pkgs.lib.concatMapStringsSep "\n" (
+                    tree:
+                    ''sync_optional_tree "${storePath}/${tree.source}" "$NIX_AGENTS_DIR/${targetName}/profiles/${profileName}/${tree.target}"''
+                  ) optionalTrees}
+                fi
+              '';
+          in
+          renderOne "default" defaultConfig
+          + "\n"
+          + pkgs.lib.concatStringsSep "\n" (
+            pkgs.lib.mapAttrsToList (profileName: meta: renderOne profileName meta.storePath) profileMeta
+          );
 
         syncAgents = pkgs.writeShellScriptBin "sync-agents" ''
           set -euo pipefail
@@ -141,42 +200,86 @@
           NIX_AGENTS_DIR="$CONFIG_DIR/nix-agents"
 
           # OpenCode
-          if [ -d "${opencodeConfig}" ]; then
-            echo "Syncing OpenCode to $NIX_AGENTS_DIR/opencode/profiles/default..."
-            sync_tree "${opencodeConfig}/agents" "$NIX_AGENTS_DIR/opencode/profiles/default/agents"
-            sync_tree "${opencodeConfig}/skills" "$NIX_AGENTS_DIR/opencode/profiles/default/skills"
-            sync_file "${opencodeConfig}/AGENTS.md" "$NIX_AGENTS_DIR/opencode/profiles/default/AGENTS.md"
-            sync_file "${opencodeConfig}/opencode.json" "$NIX_AGENTS_DIR/opencode/profiles/default/opencode.json"
-          fi
+          ${mkProfileSyncBlock {
+            label = "OpenCode";
+            targetName = "opencode";
+            defaultConfig = opencodeConfig;
+            profileMeta = opencodeProfileMeta;
+            files = [
+              {
+                source = "AGENTS.md";
+                target = "AGENTS.md";
+              }
+              {
+                source = "opencode.json";
+                target = "opencode.json";
+              }
+            ];
+          }}
 
           # Claude
-          if [ -d "${claudeConfig}" ]; then
-            echo "Syncing Claude to $NIX_AGENTS_DIR/claude/profiles/default..."
-            sync_tree "${claudeConfig}/agents" "$NIX_AGENTS_DIR/claude/profiles/default/agents"
-            sync_tree "${claudeConfig}/skills" "$NIX_AGENTS_DIR/claude/profiles/default/skills"
-            sync_file "${claudeConfig}/CLAUDE.md" "$NIX_AGENTS_DIR/claude/profiles/default/CLAUDE.md"
-            sync_file "${claudeConfig}/settings.json" "$NIX_AGENTS_DIR/claude/profiles/default/settings.json"
-            sync_file "${claudeConfig}/.mcp.json" "$NIX_AGENTS_DIR/claude/profiles/default/.mcp.json"
-          fi
+          ${mkProfileSyncBlock {
+            label = "Claude";
+            targetName = "claude";
+            defaultConfig = claudeConfig;
+            profileMeta = claudeProfileMeta;
+            files = [
+              {
+                source = "CLAUDE.md";
+                target = "CLAUDE.md";
+              }
+              {
+                source = "settings.json";
+                target = "settings.json";
+              }
+              {
+                source = ".mcp.json";
+                target = ".mcp.json";
+              }
+            ];
+          }}
 
           # Codex
-          if [ -d "${codexConfig}" ]; then
-            echo "Syncing Codex to $NIX_AGENTS_DIR/codex/profiles/default..."
-            sync_tree "${codexConfig}/agents" "$NIX_AGENTS_DIR/codex/profiles/default/agents"
-            sync_tree "${codexConfig}/skills" "$NIX_AGENTS_DIR/codex/profiles/default/skills"
-            sync_file "${codexConfig}/AGENTS.md" "$NIX_AGENTS_DIR/codex/profiles/default/AGENTS.md"
-            sync_file "${codexConfig}/mcp.json" "$NIX_AGENTS_DIR/codex/profiles/default/mcp.json"
-          fi
+          ${mkProfileSyncBlock {
+            label = "Codex";
+            targetName = "codex";
+            defaultConfig = codexConfig;
+            profileMeta = codexProfileMeta;
+            files = [
+              {
+                source = "AGENTS.md";
+                target = "AGENTS.md";
+              }
+              {
+                source = "mcp.json";
+                target = "mcp.json";
+              }
+            ];
+          }}
 
           # Pi
-          if [ -d "${piConfig}" ]; then
-            echo "Syncing Pi to $NIX_AGENTS_DIR/pi/profiles/default..."
-            sync_tree "${piConfig}/agents" "$NIX_AGENTS_DIR/pi/profiles/default/agents"
-            sync_tree "${piConfig}/skills" "$NIX_AGENTS_DIR/pi/profiles/default/skills"
-            sync_file "${piConfig}/AGENTS.md" "$NIX_AGENTS_DIR/pi/profiles/default/AGENTS.md"
-            sync_optional_tree "${piConfig}/extensions" "$NIX_AGENTS_DIR/pi/profiles/default/extensions"
-            sync_optional_tree "${piConfig}/prompts" "$NIX_AGENTS_DIR/pi/profiles/default/prompts"
-          fi
+          ${mkProfileSyncBlock {
+            label = "Pi";
+            targetName = "pi";
+            defaultConfig = piConfig;
+            profileMeta = piProfileMeta;
+            files = [
+              {
+                source = "AGENTS.md";
+                target = "AGENTS.md";
+              }
+            ];
+            optionalTrees = [
+              {
+                source = "extensions";
+                target = "extensions";
+              }
+              {
+                source = "prompts";
+                target = "prompts";
+              }
+            ];
+          }}
 
           # Cursor
           if [ -d "${cursorConfig}" ]; then
@@ -214,24 +317,28 @@
             target = "opencode";
             tool = agentPkgs.opencode;
             agentSystem = opencodeConfig;
+            profileMeta = opencodeProfileMeta;
           };
           claude = library.mkWrappedTool {
             inherit pkgs;
             target = "claude";
             tool = agentPkgs.claude-code;
             agentSystem = claudeConfig;
+            profileMeta = claudeProfileMeta;
           };
           codex = library.mkWrappedTool {
             inherit pkgs;
             target = "codex";
             tool = agentPkgs.codex;
             agentSystem = codexConfig;
+            profileMeta = codexProfileMeta;
           };
           pi = library.mkWrappedTool {
             inherit pkgs;
             target = "pi";
             tool = piCodingAgent;
             agentSystem = piConfig;
+            profileMeta = piProfileMeta;
           };
           cursor-config = cursorConfig;
           amp-config = ampConfig;

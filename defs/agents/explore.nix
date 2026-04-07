@@ -16,15 +16,13 @@
       - Answering "where is X?" or "how does Y work?" questions
 
       Tools available:
-      - Use MCP tools `read_pruned` and `search_pruned` for efficient context-aware code reading and searching. These reduce token usage by 23-54% while keeping only relevant code.
       - When you need full file content (for small files or when pruning would miss context), use standard file reading.
 
       When exploring:
       1. Start with broad searches, then narrow down
-      2. Use `search_pruned` with focused questions to find relevant code
-      3. Use `read_pruned` with context questions to understand specific files
-      4. Chain searches: find files with search, then dive deeper with reads
-      5. Check pruning statistics at `$HOME/.cache/swe-pruner/stats.json` to verify effectiveness
+      2. Use targeted searches to find relevant code
+      3. Read the specific files needed to understand the behavior
+      4. Chain searches and reads until the execution path is clear
 
       When to use this agent:
       - "Find where X is implemented"
@@ -56,10 +54,7 @@
       webfetch = "allow";
     };
     skills = [ ];
-    mcpServers = [
-      "swe-pruner"
-      "agent-observe"
-    ];
+    mcpServers = [ "agent-observe" ];
     orchestration.patterns = { };
     orchestration.antiPatterns = [ ];
     overrides = { };
