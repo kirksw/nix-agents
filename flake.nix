@@ -126,8 +126,12 @@
 
             ${pkgs.coreutils}/bin/mkdir -p "$(${pkgs.coreutils}/bin/dirname "$target_file")"
             if [ -f "$source_file" ]; then
+              ${pkgs.coreutils}/bin/chmod u+w "$target_file" 2>/dev/null || true
+              ${pkgs.coreutils}/bin/rm -f "$target_file"
               ${pkgs.coreutils}/bin/cp "$source_file" "$target_file"
+              ${pkgs.coreutils}/bin/chmod u+w "$target_file" 2>/dev/null || true
             else
+              ${pkgs.coreutils}/bin/chmod u+w "$target_file" 2>/dev/null || true
               ${pkgs.coreutils}/bin/rm -f "$target_file"
             fi
           }
