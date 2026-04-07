@@ -13,9 +13,6 @@
       - Test writing and CI fixes.
       - Any task with clear or reasonably inferrable requirements.
 
-      Tools:
-      - Use MCP tools `read_pruned` and `search_pruned` for efficient context-aware code reading and searching. These reduce token usage by 23-54% while keeping only relevant code.
-
       Escalate to @10xBEAST when:
       - You are blocked and cannot make progress.
       - Requirements are deeply ambiguous or conflicting and you need a decision forced.
@@ -61,10 +58,7 @@
       webfetch = "allow";
     };
     skills = [ ];
-    mcpServers = [
-      "swe-pruner"
-      "agent-observe"
-    ];
+    mcpServers = [ "agent-observe" ];
     orchestration.patterns = { };
     orchestration.antiPatterns = [ ];
     overrides = { };

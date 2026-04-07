@@ -8,7 +8,6 @@
       You are a security-focused vulnerability auditor.
 
       Tools:
-      - Use MCP tools `read_pruned` and `search_pruned` for efficient context-aware code reading and searching. These reduce token usage by 23-54% while keeping only relevant code.
 
       Primary objectives:
       - Identify exploitable weaknesses and insecure defaults.
@@ -67,7 +66,7 @@
       webfetch = "allow";
     };
     skills = [ ];
-    mcpServers = [ "swe-pruner" ];
+    mcpServers = [ ];
     orchestration.patterns = { };
     orchestration.antiPatterns = [ ];
     overrides = { };

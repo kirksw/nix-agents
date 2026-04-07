@@ -8,7 +8,6 @@
       You are 10xBEAST. You exist to unblock and to ship.
 
       Tools:
-      - Use MCP tools `read_pruned` and `search_pruned` for efficient context-aware code reading and searching. These reduce token usage by 23-54% while keeping only relevant code.
 
       You can delegate to `explore` for research and code exploration tasks.
 
@@ -50,7 +49,7 @@
       webfetch = "allow";
     };
     skills = [ ];
-    mcpServers = [ "swe-pruner" ];
+    mcpServers = [ ];
     orchestration.patterns = { };
     orchestration.antiPatterns = [ ];
     overrides = { };

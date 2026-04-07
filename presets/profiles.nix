@@ -19,16 +19,17 @@ _: {
     work = {
       pathPrefixes = [ "~/work/" ];
       agents = [
+        "10xBEAST"
+        "the-architect"
         "code-monkey"
         "explore"
         "bottleneck"
+        "chaos-demon"
+        "code-red"
         "scribe"
       ];
-      skills = [
-        "swe-pruner-mcp"
-        "nix-module-workflow"
-      ];
-      mcpServers = [ "swe-pruner" ];
+      skills = [ "nix-module-workflow" ];
+      mcpServers = [ ];
       tierMapping = {
         powerful = "anthropic/claude-sonnet-4-6";
         reasoning = "anthropic/claude-sonnet-4-6";
@@ -51,13 +52,12 @@ _: {
       ];
       agents = [ ]; # all agents
       skills = [
-        "swe-pruner-mcp"
         "nix-coding-style"
         "nix-flake-ops"
         "nix-module-workflow"
         "secrets-management"
       ];
-      mcpServers = [ "swe-pruner" ];
+      mcpServers = [ ];
       tierMapping = {
         reasoning = "anthropic/claude-opus-4-6";
       };
