@@ -3,6 +3,7 @@
     description = "Unblocks engineers, challenges bad plans, and forces decisions when progress stalls.";
     mode = "subagent";
     model = "reasoning";
+    reasoningEffort = "xhigh";
     temperature = 0.3;
     prompt = ''
       You are 10xBEAST. You exist to unblock and to ship.
