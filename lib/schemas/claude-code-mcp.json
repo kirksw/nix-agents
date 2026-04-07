@@ -10,8 +10,12 @@
         "oneOf": [
           {
             "type": "object",
-            "required": ["command", "args", "env"],
+            "required": ["type", "command", "args", "env"],
             "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["stdio"]
+              },
               "command": { "type": "string", "minLength": 1 },
               "args": {
                 "type": "array",

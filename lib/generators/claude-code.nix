@@ -134,6 +134,7 @@ let
   renderLocalMcp =
     command:
     {
+      type = "stdio";
       command = builtins.head command;
       args = lib.tail command;
       env = { };
