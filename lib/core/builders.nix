@@ -89,7 +89,7 @@ let
     let
       evaluated = evalModules {
         inherit modules;
-        specialArgs = { inherit inputs; };
+        specialArgs = { inherit inputs pkgs; };
       };
       rawConfig = evaluated.config;
       config = if profile != null then resolveProfile rawConfig profile else rawConfig;
@@ -159,7 +159,7 @@ let
 
       opencodeOutputs = ''
         ${commonOutputs}
-        cp ${builtins.toFile "opencode.json" generated.opencodeJson} "$out/opencode.json"
+        cp ${pkgs.writeText "opencode.json" generated.opencodeJson} "$out/opencode.json"
         cp ${builtins.toFile "AGENTS.md" generated.agentsMd} "$out/AGENTS.md"
       '';
 
@@ -167,13 +167,13 @@ let
         ${commonOutputs}
         cp ${builtins.toFile "settings.json" generated.settingsJson} "$out/settings.json"
         cp ${builtins.toFile "CLAUDE.md" generated.claudeMd} "$out/CLAUDE.md"
-        cp ${builtins.toFile "mcp.json" generated.mcpJson} "$out/.mcp.json"
+        cp ${pkgs.writeText "mcp.json" generated.mcpJson} "$out/.mcp.json"
       '';
 
       codexOutputs = ''
         ${commonOutputs}
         cp ${builtins.toFile "AGENTS.md" generated.agentsMd} "$out/AGENTS.md"
-        cp ${builtins.toFile "mcp.json" generated.mcpJson} "$out/mcp.json"
+        cp ${pkgs.writeText "mcp.json" generated.mcpJson} "$out/mcp.json"
       '';
 
       piOutputs = ''
@@ -201,14 +201,14 @@ let
             cp ${builtins.toFile "cursor-skill-${name}.mdc" content} "$out/.cursor/rules/skill-${name}.mdc"
           '') generated.skillRules
         )}
-        cp ${builtins.toFile "cursor-mcp.json" generated.mcpJson} "$out/.cursor/mcp.json"
+        cp ${pkgs.writeText "cursor-mcp.json" generated.mcpJson} "$out/.cursor/mcp.json"
       '';
 
       ampOutputs = ''
         mkdir -p "$out"
         cp ${hookManifest} "$out/hook-manifest"
         cp ${skillVersionManifest} "$out/skill-versions.json"
-        cp ${builtins.toFile "amp.json" generated.ampJson} "$out/amp.json"
+        cp ${pkgs.writeText "amp.json" generated.ampJson} "$out/amp.json"
         cp ${builtins.toFile "AGENTS.md" generated.agentsMd} "$out/AGENTS.md"
       '';
 
@@ -246,7 +246,7 @@ let
     let
       evaluated = evalModules {
         inherit modules;
-        specialArgs = { inherit inputs; };
+        specialArgs = { inherit inputs pkgs; };
       };
     in
     lib.mapAttrs (name: profile: {

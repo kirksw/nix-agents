@@ -70,23 +70,25 @@
       '';
 
   # Claude MCP config must emit local servers using the current stdio schema
-  eval-claude-mcp-json = pkgs.runCommand "eval-claude-mcp-json" { nativeBuildInputs = [ pkgs.jq ]; } ''
-    jq -e '
-      .mcpServers | type == "object" and
-      (
-        to_entries
-        | all(
-            if (.value | has("command")) then
-              .value.type == "stdio"
-            else
-              true
-            end
+  eval-claude-mcp-json =
+    pkgs.runCommand "eval-claude-mcp-json" { nativeBuildInputs = [ pkgs.jq ]; }
+      ''
+        jq -e '
+          .mcpServers | type == "object" and
+          (
+            to_entries
+            | all(
+                if (.value | has("command")) then
+                  .value.type == "stdio"
+                else
+                  true
+                end
+              )
           )
-      )
-    ' ${claudeConfig}/.mcp.json > /dev/null \
-      || { echo "FAIL: Claude MCP config local servers must declare type=stdio" >&2; exit 1; }
-    touch $out
-  '';
+        ' ${claudeConfig}/.mcp.json > /dev/null \
+          || { echo "FAIL: Claude MCP config local servers must declare type=stdio" >&2; exit 1; }
+        touch $out
+      '';
 
   # hook-manifest must be empty or contain only valid event:path lines
   eval-hook-manifest = pkgs.runCommand "eval-hook-manifest" { } ''

@@ -202,6 +202,11 @@ let
         type = types.nullOr types.package;
         default = null;
       };
+      args = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = "Extra arguments appended after the binary when command is resolved from package. Ignored when command is set explicitly.";
+      };
       url = mkOption {
         type = types.nullOr types.str;
         default = null;

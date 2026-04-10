@@ -1,11 +1,7 @@
+{ pkgs, ... }:
 {
   mcpServers.swe-pruner = {
-    enabled = true;
     type = "local";
-    command = [ ];
-    package = null;
-    url = null;
-    headers = { };
-    environment = { };
+    command = [ "${pkgs.callPackage ../../services/swe-pruner { }}/bin/swe-pruner-mcp" ];
   };
 }

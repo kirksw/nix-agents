@@ -127,23 +127,21 @@
             optionalTrees ? [ ],
           }:
           let
-            renderOne =
-              profileName: storePath:
-              ''
-                if [ -d "${storePath}" ]; then
-                  echo "Syncing ${label} to $NIX_AGENTS_DIR/${targetName}/profiles/${profileName}..."
-                  sync_tree "${storePath}/agents" "$NIX_AGENTS_DIR/${targetName}/profiles/${profileName}/agents"
-                  sync_tree "${storePath}/skills" "$NIX_AGENTS_DIR/${targetName}/profiles/${profileName}/skills"
-                  ${pkgs.lib.concatMapStringsSep "\n" (
-                    file:
-                    ''sync_file "${storePath}/${file.source}" "$NIX_AGENTS_DIR/${targetName}/profiles/${profileName}/${file.target}"''
-                  ) files}
-                  ${pkgs.lib.concatMapStringsSep "\n" (
-                    tree:
-                    ''sync_optional_tree "${storePath}/${tree.source}" "$NIX_AGENTS_DIR/${targetName}/profiles/${profileName}/${tree.target}"''
-                  ) optionalTrees}
-                fi
-              '';
+            renderOne = profileName: storePath: ''
+              if [ -d "${storePath}" ]; then
+                echo "Syncing ${label} to $NIX_AGENTS_DIR/${targetName}/profiles/${profileName}..."
+                sync_tree "${storePath}/agents" "$NIX_AGENTS_DIR/${targetName}/profiles/${profileName}/agents"
+                sync_tree "${storePath}/skills" "$NIX_AGENTS_DIR/${targetName}/profiles/${profileName}/skills"
+                ${pkgs.lib.concatMapStringsSep "\n" (
+                  file:
+                  ''sync_file "${storePath}/${file.source}" "$NIX_AGENTS_DIR/${targetName}/profiles/${profileName}/${file.target}"''
+                ) files}
+                ${pkgs.lib.concatMapStringsSep "\n" (
+                  tree:
+                  ''sync_optional_tree "${storePath}/${tree.source}" "$NIX_AGENTS_DIR/${targetName}/profiles/${profileName}/${tree.target}"''
+                ) optionalTrees}
+              fi
+            '';
           in
           renderOne "default" defaultConfig
           + "\n"
@@ -345,6 +343,7 @@
           pi-coding-agent = piCodingAgent;
           update-script = updateScript;
           observe-service = pkgs.callPackage ./services/agent-observe { };
+          swe-pruner = pkgs.callPackage ./services/swe-pruner { };
           default = opencodeConfig;
         };
 

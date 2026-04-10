@@ -80,7 +80,7 @@ let
     if server.command != [ ] then
       server.command
     else if server.package != null then
-      [ "${server.package}/bin/${name}" ]
+      [ "${server.package}/bin/${name}" ] ++ server.args
     else
       [ ];
 

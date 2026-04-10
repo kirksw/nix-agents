@@ -10,7 +10,10 @@ let
   preamble = shared.mkHumanPreamble config.human;
 
   workflowGuide =
-    if src != null then builtins.unsafeDiscardStringContext (builtins.readFile (src + "/AGENTS.md")) else "";
+    if src != null then
+      builtins.unsafeDiscardStringContext (builtins.readFile (src + "/AGENTS.md"))
+    else
+      "";
 
   generatorDefaults = {
     fast = "anthropic/claude-haiku-4-5-20251001";
@@ -74,7 +77,9 @@ let
     in
     "---\n${lib.concatStringsSep "\n" lines}\n---";
 
-  agentsOutput = lib.mapAttrs (name: agent: renderFrontmatter name agent + "\n" + preamble + agent.prompt + "\n") config.agents;
+  agentsOutput = lib.mapAttrs (
+    name: agent: renderFrontmatter name agent + "\n" + preamble + agent.prompt + "\n"
+  ) config.agents;
 
   skillSkel = lib.mapAttrs (
     name: skill:
@@ -86,7 +91,7 @@ let
     if server.command != [ ] then
       server.command
     else if server.package != null then
-      [ "${server.package}/bin/${name}" ]
+      [ "${server.package}/bin/${name}" ] ++ server.args
     else
       [ ];
 
