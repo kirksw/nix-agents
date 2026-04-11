@@ -26,10 +26,10 @@ let
       "";
 
   generatorDefaults = {
-    fast = "anthropic/claude-haiku-4-5-20251001";
-    balanced = "anthropic/claude-sonnet-4-6";
-    powerful = "google/gemini-2.5-pro";
-    reasoning = "anthropic/claude-opus-4-6";
+    fast = "minimax/minimax-m2.7-highspeed";
+    balanced = "openai/gpt-5.3-codex";
+    powerful = "glm/glm-5.1";
+    reasoning = "glm/glm-5.1";
   };
   tierModels = generatorDefaults // config.tierMapping;
   resolveModel = m: tierModels.${m} or m;
@@ -85,6 +85,9 @@ let
       ++ lib.optional (
         agent.managedAgents != [ ]
       ) "visibleAgents: ${lib.concatStringsSep "," agent.managedAgents}"
+      ++ lib.optional (
+        agent.maxDelegationDepth != null
+      ) "maxDelegationDepth: ${toString agent.maxDelegationDepth}"
       ++ [ "permission:" ]
       ++ [
         (renderPermField 2 "edit" (resolvePermField "edit" agent.permissions.edit))

@@ -154,6 +154,12 @@ let
 in
 {
   options = {
+    maxDelegationDepth = lib.mkOption {
+      type = lib.types.int;
+      default = 5;
+      description = "System-wide max delegation depth. Individual agents can override.";
+    };
+
     tierMapping = lib.mkOption {
       type = lib.types.attrsOf lib.types.str;
       default = { };

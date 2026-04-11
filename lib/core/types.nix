@@ -147,6 +147,11 @@ let
         default = [ ];
         description = "Additional tools granted beyond tier defaults. Use sparingly for exceptions like COO needing read access.";
       };
+      maxDelegationDepth = mkOption {
+        type = types.nullOr types.int;
+        default = null;
+        description = "Maximum recursive delegation depth. Null for system default.";
+      };
       delegatesTo = mkOption {
         type = types.listOf types.str;
         default = [ ];
