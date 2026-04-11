@@ -192,6 +192,24 @@
       ''
   );
 
+  # All tiered agents are present and the tiered config built (proves depth config eval passed)
+  eval-tier-depth-config = pkgs.runCommand "eval-tier-depth-config" { } (
+    if tieredPiConfig == null then
+      ''echo "SKIP: tieredPiConfig not provided"; touch $out''
+    else
+      ''
+        # Verify all tiered agents were generated (proves eval-time validation passed)
+        for agent in orchestrator eng-manager qa-manager prod-manager architect-manager coo; do
+          f="${tieredPiConfig}/agents/$agent.md"
+          if [ ! -f "$f" ]; then
+            echo "FAIL: $agent missing from tiered config" >&2
+            exit 1
+          fi
+        done
+        touch $out
+      ''
+  );
+
   # Skill content must not contain personal host references from old nixfiles content
   eval-no-stale-refs = pkgs.runCommand "eval-no-stale-refs" { } ''
     if grep -rq 'nixos-ry6a\|nixfiles-v2\| lunar ' ${opencodeConfig}/skills/ 2>/dev/null; then
