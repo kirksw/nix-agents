@@ -27,10 +27,9 @@ export default function (pi: ExtensionAPI) {
         return;
       }
 
-      // Send a user message that instructs the agent to delegate to orchestrator.
-      // Using sendUserMessage triggers a full agent turn, so the agent will
-      // see the instruction and invoke the subagent tool.
-      ctx.sendUserMessage(
+      // sendUserMessage is on ExtensionAPI (pi), not on ctx.
+      // It sends a user message that triggers a full agent turn.
+      pi.sendUserMessage(
         `Use the subagent tool to delegate this task to the orchestrator:\n\n${task}`,
       );
     },
