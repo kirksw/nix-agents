@@ -271,11 +271,11 @@
             ];
           }}
 
-          # Pi
+          # Pi (tiered config — includes all flat agents + orchestrator/managers)
           ${mkProfileSyncBlock {
             label = "Pi";
             targetName = "pi";
-            defaultConfig = piConfig;
+            defaultConfig = tieredPiConfig;
             profileMeta = piProfileMeta;
             files = [
               {
