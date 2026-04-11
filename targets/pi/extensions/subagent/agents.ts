@@ -13,6 +13,8 @@ export interface AgentConfig {
   description: string;
   tools?: string[];
   model?: string;
+  visibleAgents?: string[];
+  maxDelegationDepth?: number;
   systemPrompt: string;
   source: "user" | "project";
   filePath: string;
@@ -60,11 +62,22 @@ function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig
       .map((t: string) => t.trim())
       .filter(Boolean);
 
+    const visibleAgents = frontmatter.visibleAgents
+      ?.split(",")
+      .map((a: string) => a.trim())
+      .filter(Boolean);
+
+    const maxDelegationDepthRaw = frontmatter.maxDelegationDepth;
+    const maxDelegationDepth =
+      maxDelegationDepthRaw !== undefined ? parseInt(String(maxDelegationDepthRaw), 10) : undefined;
+
     agents.push({
       name: frontmatter.name,
       description: frontmatter.description,
       tools: tools && tools.length > 0 ? tools : undefined,
       model: frontmatter.model,
+      visibleAgents: visibleAgents && visibleAgents.length > 0 ? visibleAgents : undefined,
+      maxDelegationDepth: maxDelegationDepth !== undefined && !isNaN(maxDelegationDepth) ? maxDelegationDepth : undefined,
       systemPrompt: body,
       source,
       filePath,
