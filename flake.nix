@@ -80,7 +80,7 @@
         };
         piProfileMeta = library.mkProfileMeta {
           inherit pkgs;
-          modules = defaultModules;
+          modules = tieredModules;
           target = "pi";
           src = ./.;
         };
@@ -351,7 +351,7 @@
             inherit pkgs;
             target = "pi";
             tool = piCodingAgent;
-            agentSystem = piConfig;
+            agentSystem = tieredPiConfig;
             profileMeta = piProfileMeta;
           };
           cursor-config = cursorConfig;
