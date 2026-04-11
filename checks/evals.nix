@@ -7,6 +7,7 @@
   claudeConfig,
   codexConfig,
   ampConfig,
+  tieredPiConfig ? null,
 }:
 {
   # All skills must have a non-empty SKILL.md
@@ -115,6 +116,81 @@
       || { echo "FAIL: amp.json missing mcpServers" >&2; exit 1; }
     touch $out
   '';
+
+  # Tier 0/1 agents must not have disallowed tools in generated output
+  eval-tier-tool-restriction = pkgs.runCommand "eval-tier-tool-restriction" { } (
+    if tieredPiConfig == null then
+      ''echo "SKIP: tieredPiConfig not provided"; touch $out''
+    else
+      ''
+        ok=1
+        for agent in orchestrator eng-manager qa-manager prod-manager architect-manager; do
+          f="${tieredPiConfig}/agents/$agent.md"
+          if [ -f "$f" ]; then
+            tools_line=$(grep '^tools:' "$f" || echo "")
+            if echo "$tools_line" | grep -qE 'write|edit|bash'; then
+              echo "FAIL: $agent has disallowed tools: $tools_line" >&2
+              ok=0
+            fi
+          else
+            echo "FAIL: $agent agent file missing from tiered config: $f" >&2
+            ok=0
+          fi
+        done
+        # COO exception: may have read, but not write/edit/bash
+        f="${tieredPiConfig}/agents/coo.md"
+        if [ -f "$f" ]; then
+          tools_line=$(grep '^tools:' "$f" || echo "")
+          if echo "$tools_line" | grep -qE 'write|edit|bash'; then
+            echo "FAIL: coo has disallowed tools: $tools_line" >&2
+            ok=0
+          fi
+          if ! echo "$tools_line" | grep -q 'read'; then
+            echo "FAIL: coo missing required read tool: $tools_line" >&2
+            ok=0
+          fi
+        else
+          echo "FAIL: coo agent file missing from tiered config: $f" >&2
+          ok=0
+        fi
+        [ "$ok" = "1" ] || exit 1
+        touch $out
+      ''
+  );
+
+  # All managedAgents must be reflected as visibleAgents frontmatter for tiered agents
+  eval-visible-agents = pkgs.runCommand "eval-visible-agents" { } (
+    if tieredPiConfig == null then
+      ''echo "SKIP: tieredPiConfig not provided"; touch $out''
+    else
+      ''
+        ok=1
+        for agent in orchestrator eng-manager qa-manager prod-manager architect-manager coo; do
+          f="${tieredPiConfig}/agents/$agent.md"
+          if [ -f "$f" ]; then
+            if ! grep -q '^visibleAgents:' "$f"; then
+              echo "FAIL: $agent missing visibleAgents frontmatter" >&2
+              ok=0
+            fi
+          fi
+        done
+        [ "$ok" = "1" ] || exit 1
+        touch $out
+      ''
+  );
+
+  # managedAgents subset validation passes (proven by successful build of tieredPiConfig)
+  eval-managed-subset = pkgs.runCommand "eval-managed-subset" { } (
+    if tieredPiConfig == null then
+      ''echo "SKIP: tieredPiConfig not provided"; touch $out''
+    else
+      ''
+        # This is validated at Nix eval time by system.nix checkManagedSubset.
+        # If tieredPiConfig built successfully, validation passed.
+        test -d ${tieredPiConfig}/agents
+        touch $out
+      ''
+  );
 
   # Skill content must not contain personal host references from old nixfiles content
   eval-no-stale-refs = pkgs.runCommand "eval-no-stale-refs" { } ''

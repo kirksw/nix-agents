@@ -142,17 +142,24 @@ let
         else
           skill.content;
 
-      writeSkill = name: content: ''
-        mkdir -p "$out/skills/${name}"
-        cp ${builtins.toFile "skill-${name}.md" content} "$out/skills/${name}/SKILL.md"
-      '';
+      writeSkill =
+        name: skill:
+        if skill.src != null then
+          ''
+            mkdir -p "$out/skills/${name}"
+            cp -r ${skill.src}/. "$out/skills/${name}/"
+            chmod -R u+w "$out/skills/${name}"
+          ''
+        else
+          ''
+            mkdir -p "$out/skills/${name}"
+            cp ${builtins.toFile "skill-${name}.md" skill.content} "$out/skills/${name}/SKILL.md"
+          '';
 
       commonOutputs = ''
         mkdir -p "$out/agents" "$out/skills"
         ${lib.concatStringsSep "\n" (lib.mapAttrsToList writeAgent generated.agents)}
-        ${lib.concatStringsSep "\n" (
-          lib.mapAttrsToList (name: skill: writeSkill name (skillContent name skill)) config.skills
-        )}
+        ${lib.concatStringsSep "\n" (lib.mapAttrsToList writeSkill config.skills)}
         cp ${hookManifest} "$out/hook-manifest"
         cp ${skillVersionManifest} "$out/skill-versions.json"
       '';

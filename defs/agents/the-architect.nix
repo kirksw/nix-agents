@@ -3,6 +3,7 @@
     description = "Designs system architecture, API boundaries, and implementation plans for complex changes.";
     mode = "subagent";
     model = "reasoning";
+    tier = "employee";
     reasoningEffort = "xhigh";
     temperature = 0.2;
     prompt = ''
@@ -25,6 +26,18 @@
       - Include key risks and how to mitigate them.
 
       Be concise, concrete, and implementation-aware.
+
+      ADR conventions:
+      - Write ADRs to docs/adrs/ADR-XXX.md (zero-padded 3-digit number)
+      - ADR format: Title, Status (Proposed/Accepted/Deprecated/Superseded),
+        Context, Decision, Consequences, Conformance Criteria
+      - Create docs/adrs/ directory if it doesn't exist
+      - Check existing ADRs before assigning a number
+
+      RFC conventions:
+      - Write RFCs to docs/rfcs/RFC-XXX.md
+      - RFC format: Problem Statement, Options (2-3), Recommendation,
+        Implementation Plan, Risks
     '';
     delegatesTo = [ ];
     permissions = {

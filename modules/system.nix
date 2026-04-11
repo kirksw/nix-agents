@@ -84,6 +84,22 @@ let
     else
       true;
 
+  checkManagedSubset =
+    let
+      bad = lib.concatMap (
+        name:
+        let
+          agent = config.agents.${name};
+          notInDelegates = lib.filter (m: !builtins.elem m agent.delegatesTo) agent.managedAgents;
+        in
+        map (m: "${name}.managedAgents: ${m} not in delegatesTo") notInDelegates
+      ) agentNames;
+    in
+    if bad != [ ] then
+      throw "managedAgents must be a subset of delegatesTo: ${lib.concatStringsSep ", " bad}"
+    else
+      true;
+
   checkProfileRefs =
     let
       profileNames = builtins.attrNames config.profiles;
@@ -133,7 +149,8 @@ let
     && checkTaskPerms
     && checkSkillRefs
     && checkMcpRefs
-    && checkProfileRefs;
+    && checkProfileRefs
+    && checkManagedSubset;
 in
 {
   options = {

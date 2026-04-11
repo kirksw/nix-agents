@@ -26,6 +26,11 @@
           ./presets/profiles.nix
         ];
 
+        tieredModules = [
+          ./presets/tiered.nix
+          ./presets/profiles.nix
+        ];
+
         mkConfig =
           target:
           library.mkAgentSystem {
@@ -45,6 +50,29 @@
         claudeConfig = mkConfig "claude";
         codexConfig = mkConfig "codex";
         piConfig = mkConfigWithSrc "pi";
+
+        mkTieredConfig =
+          target:
+          library.mkAgentSystem {
+            inherit pkgs target;
+            modules = tieredModules;
+          };
+
+        mkTieredConfigWithSrc =
+          target:
+          library.mkAgentSystem {
+            inherit pkgs target;
+            modules = tieredModules;
+            src = ./.;
+          };
+
+        tieredPiConfig = mkTieredConfigWithSrc "pi";
+        tieredPiProfileMeta = library.mkProfileMeta {
+          inherit pkgs;
+          modules = tieredModules;
+          target = "pi";
+          src = ./.;
+        };
         cursorConfig = mkConfig "cursor";
         ampConfig = mkConfig "amp";
         opencodeProfileMeta = library.mkProfileMeta {
@@ -105,6 +133,7 @@
             claudeConfig
             codexConfig
             ampConfig
+            tieredPiConfig
             ;
         };
 
@@ -340,6 +369,7 @@
           };
           cursor-config = cursorConfig;
           amp-config = ampConfig;
+          tiered-pi-config = tieredPiConfig;
           pi-coding-agent = piCodingAgent;
           update-script = updateScript;
           observe-service = pkgs.callPackage ./services/agent-observe { };

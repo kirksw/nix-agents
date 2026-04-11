@@ -26,7 +26,7 @@
           description = "One line — used as trigger description and shown in skill listings.";
           content = "# My Skill\n\nMarkdown body loaded when the skill triggers.";
           resources = { };   # attrset of name -> path for bundled files
-          src = null;        # set to a path to use a pre-built SKILL.md directory
+          src = null;        # set to a path to copy the full skill directory (SKILL.md + references/ etc.)
         };
       }
       ```

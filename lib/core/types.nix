@@ -126,6 +126,27 @@ let
         type = types.lines;
         description = "Prompt body for the agent.";
       };
+      tier = mkOption {
+        type = types.nullOr (
+          types.enum [
+            "orchestrator"
+            "manager"
+            "employee"
+          ]
+        );
+        default = null;
+        description = "Tier in the delegation hierarchy. Null for flat-graph agents.";
+      };
+      managedAgents = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = "Agent names this manager/orchestrator can delegate to. Injected into prompt and used for future runtime filtering.";
+      };
+      extraTools = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = "Additional tools granted beyond tier defaults. Use sparingly for exceptions like COO needing read access.";
+      };
       delegatesTo = mkOption {
         type = types.listOf types.str;
         default = [ ];

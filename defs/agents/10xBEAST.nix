@@ -3,6 +3,7 @@
     description = "Unblocks engineers, challenges bad plans, and forces decisions when progress stalls.";
     mode = "subagent";
     model = "reasoning";
+    tier = "employee";
     reasoningEffort = "xhigh";
     temperature = 0.3;
     prompt = ''
