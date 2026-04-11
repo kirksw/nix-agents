@@ -51,13 +51,6 @@
         codexConfig = mkConfig "codex";
         piConfig = mkConfigWithSrc "pi";
 
-        mkTieredConfig =
-          target:
-          library.mkAgentSystem {
-            inherit pkgs target;
-            modules = tieredModules;
-          };
-
         mkTieredConfigWithSrc =
           target:
           library.mkAgentSystem {
@@ -67,12 +60,6 @@
           };
 
         tieredPiConfig = mkTieredConfigWithSrc "pi";
-        tieredPiProfileMeta = library.mkProfileMeta {
-          inherit pkgs;
-          modules = tieredModules;
-          target = "pi";
-          src = ./.;
-        };
         cursorConfig = mkConfig "cursor";
         ampConfig = mkConfig "amp";
         opencodeProfileMeta = library.mkProfileMeta {
