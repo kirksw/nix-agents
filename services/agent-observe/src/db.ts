@@ -65,20 +65,36 @@ export function initDb(): void {
     // Only suppress "duplicate column" — rethrow anything else
     if (!(err instanceof Error) || !err.message.includes('duplicate column')) throw err;
   }
+  // Migrate: add tier metadata columns
+  const tierMigrations: string[] = [
+    'ALTER TABLE sessions ADD COLUMN tier TEXT',
+    'ALTER TABLE sessions ADD COLUMN parent_agent TEXT',
+    'ALTER TABLE sessions ADD COLUMN delegation_depth INTEGER',
+  ];
+  for (const sql of tierMigrations) {
+    try {
+      db.exec(sql);
+    } catch (err) {
+      if (!(err instanceof Error) || !err.message.includes('duplicate column')) throw err;
+    }
+  }
 }
 
 export function ingest(payload: IngestPayload): void {
   const now = new Date().toISOString();
   if (payload.event === 'session-start') {
     db.prepare(`
-      INSERT OR IGNORE INTO sessions (id, profile, project, started_at, skill_versions)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT OR IGNORE INTO sessions (id, profile, project, started_at, skill_versions, tier, parent_agent, delegation_depth)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       payload.sessionId,
       payload.profile ?? 'default',
       payload.project ?? '',
       payload.startedAt ?? now,
-      payload.skillVersions ? JSON.stringify(payload.skillVersions) : null
+      payload.skillVersions ? JSON.stringify(payload.skillVersions) : null,
+      payload.tier ?? null,
+      payload.parentAgent ?? null,
+      payload.delegationDepth ?? null
     );
   } else if (payload.event === 'session-end') {
     db.prepare(`
@@ -256,6 +272,9 @@ function rowToSession(r: Record<string, unknown>): Session {
     skillVersions: r.skill_versions
       ? (JSON.parse(r.skill_versions as string) as Record<string, string>)
       : undefined,
+    tier: (r.tier as string | null) ?? null,
+    parentAgent: (r.parent_agent as string | null) ?? null,
+    delegationDepth: (r.delegation_depth as number | null) ?? null,
   };
 }
 
