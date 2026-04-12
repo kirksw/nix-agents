@@ -17,7 +17,10 @@ _: {
 
     # work — work projects, restricted agent set, shared work credentials
     work = {
-      pathPrefixes = [ "~/work/" ];
+      pathPrefixes = [
+        "~/git/github.com/lunarway/"
+        "~/projects/lunar/"
+      ];
       providers = [ ];
       defaultProfile = "stable";
     };
