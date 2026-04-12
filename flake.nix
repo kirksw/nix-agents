@@ -601,8 +601,8 @@
             grep -q 'bases/\$NAX_BASE/profiles/\$NAX_PROFILE' "$codex_wrapper"
             grep -q 'bases/\$NAX_BASE/profiles/\$NAX_PROFILE' "$pi_wrapper"
 
-            # Pi must use base-scoped shared state
-            grep -q '\$HOME/.pi/agent/bases/\$NAX_BASE' "$pi_wrapper"
+            # Pi must use co-located base-scoped state
+            grep -q 'nix-agents/pi/bases/\$NAX_BASE/state' "$pi_wrapper"
 
             # All wrappers must export NAX_BASE
             grep -q 'export NAX_BASE=' "$opencode_wrapper"

@@ -568,9 +568,10 @@ in
       fi
 
       if [ "${target}" = "pi" ]; then
-        _pi_base_dir="$HOME/.pi/agent/bases/$NAX_BASE"
-        _pi_profile_dir="$_NAX_BASE_CONFIG_HOME/nix-agents/pi/bases/$NAX_BASE/profiles/$NAX_PROFILE"
-        mkdir -p "$_pi_profile_dir" "$_pi_base_dir"
+        _pi_base_dir="$_NAX_BASE_CONFIG_HOME/nix-agents/pi/bases/$NAX_BASE"
+        _pi_profile_dir="$_pi_base_dir/profiles/$NAX_PROFILE"
+        _pi_state_dir="$_pi_base_dir/state"
+        mkdir -p "$_pi_profile_dir" "$_pi_state_dir"
 
         # Profile-specific content from nix store
         _sync_link_dir "${nixAgentsConfig}/agents" "$_pi_profile_dir/agents"
@@ -579,17 +580,17 @@ in
         _sync_link_dir "${nixAgentsConfig}/extensions" "$_pi_profile_dir/extensions"
         _sync_link_dir "${nixAgentsConfig}/prompts" "$_pi_profile_dir/prompts"
 
-        # Shared state from base-scoped dir (credentials, sessions, models, settings)
+        # Shared state from base-scoped state dir (credentials, sessions, models, settings)
         if [ ! -e "$_pi_profile_dir/auth.json" ]; then
-          ln -sfn "$_pi_base_dir/auth.json" "$_pi_profile_dir/auth.json" 2>/dev/null || true
+          ln -sfn "$_pi_state_dir/auth.json" "$_pi_profile_dir/auth.json" 2>/dev/null || true
         fi
         if [ ! -e "$_pi_profile_dir/models.json" ]; then
-          ln -sfn "$_pi_base_dir/models.json" "$_pi_profile_dir/models.json" 2>/dev/null || true
+          ln -sfn "$_pi_state_dir/models.json" "$_pi_profile_dir/models.json" 2>/dev/null || true
         fi
         if [ ! -e "$_pi_profile_dir/settings.json" ]; then
-          ln -sfn "$_pi_base_dir/settings.json" "$_pi_profile_dir/settings.json" 2>/dev/null || true
+          ln -sfn "$_pi_state_dir/settings.json" "$_pi_profile_dir/settings.json" 2>/dev/null || true
         fi
-        _sync_link_dir "$_pi_base_dir/sessions" "$_pi_profile_dir/sessions"
+        _sync_link_dir "$_pi_state_dir/sessions" "$_pi_profile_dir/sessions"
 
         export PI_CODING_AGENT_DIR="$_pi_profile_dir"
         exec "${toolBin}" "$@"

@@ -113,7 +113,7 @@ Canonical naming: `<base>/<profile>` (e.g., `work/stable`, `personal/extreme`).
 
 Config root: `~/.config/nix-agents/<target>/bases/<base>/profiles/<profile>/`
 
-For Pi, shared state is base-scoped: `~/.pi/agent/bases/<base>/` (auth.json, models.json, settings.json, sessions/)
+For Pi, shared state is co-located under `~/.config/nix-agents/pi/bases/<base>/state/` (auth.json, models.json, settings.json, sessions/)
 
 ### Migration
 
