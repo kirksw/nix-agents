@@ -77,8 +77,7 @@ nix-agents/
 │   └── agent-observe/         # Observability service: HTTP + SQLite + MCP server
 ├── presets/
 │   ├── default.nix            # 8-agent team + 7 skills + swe-pruner MCP
-│   ├── profiles.nix           # Flat profiles (legacy, backward compat)
-│   ├── profiles-v2.nix        # Base/profile hierarchy (ADR-0001, recommended)
+│   ├── profiles.nix           # Base/profile hierarchy (ADR-0001)
 │   ├── minimal.nix            # Minimal 2-agent team
 │   └── security.nix           # Security-focused preset
 └── templates/
@@ -118,7 +117,7 @@ For Pi, shared state is base-scoped: `~/.pi/agent/bases/<base>/` (auth.json, mod
 
 ### Migration
 
-Flat profile names (no base field) are treated as `default/<name>` during the transition window. Use `presets/profiles-v2.nix` for explicit base assignments. Run `nix run .#migrate` to move existing Pi state to base-scoped directories.
+Flat profile names (no base field) are treated as `default/<name>` during the transition window.
 
 ## Type System
 

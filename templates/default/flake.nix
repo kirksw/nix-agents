@@ -29,9 +29,8 @@
         #   ${nix-agents}/presets/security.nix  - minimal + bottleneck + code-red
         preset = "${nix-agents}/presets/default.nix";
 
-        # Profile preset options:
-        #   ${nix-agents}/presets/profiles.nix     - flat profiles (legacy, backward compat)
-        #   ${nix-agents}/presets/profiles-v2.nix   - base/profile hierarchy (ADR-0001)
+        # Available profiles preset:
+        #   ${nix-agents}/presets/profiles.nix   - base/profile hierarchy (ADR-0001)
         profiles = "${nix-agents}/presets/profiles.nix";
 
         myAgentSystem = agentsLib.mkAgentSystem {

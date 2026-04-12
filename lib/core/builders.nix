@@ -40,17 +40,7 @@ let
       # Flat name — check if profile declares a base, otherwise implicit "default"
       let
         profileCfg = config.profiles.${profileName} or null;
-        explicitBase = profileCfg != null && profileCfg.base != null;
-        baseName = if explicitBase then profileCfg.base else "default";
-        _ =
-          if !explicitBase && config.bases == { } then
-            # No bases defined and profile has no base field — this is the
-            # legacy flat profile model. Emit a hint for migration.
-            builtins.trace "nix-agents: profile '${profileName}' has no base. "
-            + "Consider using profiles-v2.nix with explicit base assignments. "
-            + "See docs/adr/ADR-0001-base-profile-hierarchy.md" null
-          else
-            null;
+        baseName = if profileCfg != null && profileCfg.base != null then profileCfg.base else "default";
       in
       {
         base = baseName;
