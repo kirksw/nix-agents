@@ -181,6 +181,7 @@
               "$target_dir"/..?* \
               2>/dev/null || true
             ${pkgs.coreutils}/bin/cp -R "$source_dir"/. "$target_dir"/
+            ${pkgs.coreutils}/bin/chmod -R u+w "$target_dir" 2>/dev/null || true
           }
 
           sync_optional_tree() {
