@@ -518,7 +518,8 @@ in
         local target_path="$2"
         rm -rf "$target_path"
         if [ -d "$source_dir" ]; then
-          ln -sfn "$source_dir" "$target_path"
+          cp -R "$source_dir" "$target_path"
+          chmod -R u+w "$target_path"
         fi
       }
       _sync_link_file() {
@@ -526,7 +527,8 @@ in
         local target_path="$2"
         rm -rf "$target_path"
         if [ -f "$source_file" ]; then
-          ln -sfn "$source_file" "$target_path"
+          cp "$source_file" "$target_path"
+          chmod u+w "$target_path"
         fi
       }
 
