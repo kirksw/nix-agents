@@ -89,7 +89,7 @@ nix-agents/
 1. **Definition** — Agents, skills, MCP servers, human context, providers, bases, and profiles are plain Nix attrsets in `defs/`.
 2. **Composition** — `presets/default.nix` imports all built-in definitions. Downstream users can import a preset and overlay their own.
 3. **Evaluation** — `lib/core/eval.nix` calls `lib.evalModules` with all 9 module declarations. `modules/system.nix` validates the agent graph, profile references, and base invariants at eval time.
-4. **Base resolution** — `lib/core/builders.nix` `resolveBaseProfile` normalizes profile identifiers into `{ base, profile }`. Flat names without a `base` field resolve to `default/<name>`.
+4. **Base resolution** — `lib/core/builders.nix` `resolveBaseProfile` normalizes profile identifiers into `{ base, profile }`. Every profile must declare a `base` field.
 5. **Profile resolution** — `resolveProfile` filters agents/skills/MCP servers and merges base-scoped providers, human context, tier mappings, and permission overrides.
 6. **Generation** — Each generator transforms the evaluated (and optionally profile-filtered) config into tool-specific output files.
 7. **Building** — `mkAgentSystem` writes the generated output to a Nix store path. `mkWrappedTool` creates a shell wrapper that resolves credentials, selects the active profile by `$PWD`, and execs the real tool binary.
@@ -117,7 +117,7 @@ For Pi, shared state is co-located under `~/.config/nix-agents/pi/bases/<base>/s
 
 ### Migration
 
-Flat profile names (no base field) are treated as `default/<name>` during the transition window.
+Every profile must declare a `base` field referencing an existing entry in `config.bases`.
 
 ## Type System
 
@@ -135,7 +135,7 @@ Flat profile names (no base field) are treated as `default/<name>` during the tr
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `base` | `nullOr str` | Base this profile belongs to (null = `"default"` during migration) |
+| `base` | `str` | Base this profile belongs to (required, must reference an existing entry in `config.bases`) |
 | `pathPrefixes` | `listOf str` | Filesystem path prefixes that auto-select this profile |
 | `providers` | `listOf str` | Provider names active in this profile (merged with base providers) |
 | `agents` | `listOf str` | Agent names included (empty = all) |

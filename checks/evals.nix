@@ -249,8 +249,16 @@
                 credentialRef = "TEST_KEY";
                 envVar = "TEST_KEY";
               };
-              profiles.alpha.pathPrefixes = [ "~/alpha/" ];
-              profiles.beta.pathPrefixes = [ "~/beta/" ];
+              bases.alpha.pathPrefixes = [ "~/alpha/" ];
+              bases.beta.pathPrefixes = [ "~/beta/" ];
+              profiles.alpha = {
+                base = "alpha";
+                pathPrefixes = [ "~/alpha/" ];
+              };
+              profiles.beta = {
+                base = "beta";
+                pathPrefixes = [ "~/beta/" ];
+              };
             }
           ];
         }).config;
@@ -260,10 +268,10 @@
       r3 = rbp "work/stable";
     in
     pkgs.runCommand "eval-base-profile-resolution" { } ''
-      # Flat profiles with no base field -> default base
-      [ "${r1.base}" = "default" ] || { echo "FAIL: expected base=default got ${r1.base}" >&2; exit 1; }
+      # Flat names with base field resolve correctly
+      [ "${r1.base}" = "alpha" ] || { echo "FAIL: expected base=alpha got ${r1.base}" >&2; exit 1; }
       [ "${r1.profile}" = "alpha" ] || { echo "FAIL: expected profile=alpha got ${r1.profile}" >&2; exit 1; }
-      [ "${r2.base}" = "default" ] || { echo "FAIL: expected base=default got ${r2.base}" >&2; exit 1; }
+      [ "${r2.base}" = "beta" ] || { echo "FAIL: expected base=beta got ${r2.base}" >&2; exit 1; }
       [ "${r2.profile}" = "beta" ] || { echo "FAIL: expected profile=beta got ${r2.profile}" >&2; exit 1; }
       # Explicit base/profile format
       [ "${r3.base}" = "work" ] || { echo "FAIL: expected base=work got ${r3.base}" >&2; exit 1; }
@@ -416,6 +424,42 @@
       ${
         if result.success then
           "echo 'FAIL: nonexistent base should have been rejected' >&2; exit 1"
+        else
+          "# Correctly rejected"
+      }
+      touch $out
+    '';
+
+  # Profile without a base field must fail at eval time.
+  eval-base-required-reject =
+    let
+      lib' = pkgs.lib;
+      types = import ../lib/core/types.nix { lib = lib'; };
+      evalModules = import ../lib/core/eval.nix {
+        lib = lib';
+        inherit types;
+      };
+      builders = import ../lib/core/builders.nix {
+        lib = lib';
+        inherit evalModules;
+      };
+
+      cfg =
+        (evalModules {
+          modules = [
+            {
+              profiles.rogue = {
+                pathPrefixes = [ "~/rogue/" ];
+              };
+            }
+          ];
+        }).config;
+      result = builtins.tryEval (builders.resolveBaseProfile cfg "rogue");
+    in
+    pkgs.runCommand "eval-base-required-reject" { } ''
+      ${
+        if result.success then
+          "echo 'FAIL: profile without base should have been rejected' >&2; exit 1"
         else
           "# Correctly rejected"
       }

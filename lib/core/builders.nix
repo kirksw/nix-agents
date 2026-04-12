@@ -37,10 +37,15 @@ let
         profile = lib.concatStringsSep "/" (lib.tail parts);
       }
     else
-      # Flat name — check if profile declares a base, otherwise implicit "default"
+      # Flat name — profile must declare a base field
       let
         profileCfg = config.profiles.${profileName} or null;
-        baseName = if profileCfg != null && profileCfg.base != null then profileCfg.base else "default";
+        baseName =
+          if profileCfg != null && profileCfg.base != null then
+            profileCfg.base
+          else
+            throw "nix-agents: profile '${profileName}' has no base assigned. "
+            + "Every profile must declare a base field referencing an entry in config.bases.";
       in
       {
         base = baseName;
@@ -291,7 +296,7 @@ let
   #   storePath    — nix store path with generated config
   #   pathPrefixes — filesystem prefixes for profile auto-detection
   #   providers    — resolved provider objects (base + profile merged, deduped)
-  #   base         — resolved base name ("default" for flat profiles)
+  #   base         — resolved base name from profile's base field
   mkProfileMeta =
     {
       pkgs,
@@ -453,7 +458,6 @@ in
       # Sets _NAX_CONFIG and _NAX_BASE based on $PWD.
       profileBlock = lib.optionalString needsProfileSelection ''
         _NAX_PROFILE="${forcedProfile}"
-        _NAX_BASE="default"
         ${profileDetectionBlock}
         case "''${_NAX_PROFILE:-}" in
         ${profilePathCaseArms}
@@ -492,7 +496,7 @@ in
       _NAX_BASE_CONFIG_HOME="''${XDG_CONFIG_HOME:-$HOME/.config}"
       _NAX_BASE_DATA_HOME="''${XDG_DATA_HOME:-$HOME/.local/share}"
       export NAX_PROFILE="''${_NAX_PROFILE:-default}"
-      export NAX_BASE="''${_NAX_BASE:-default}"
+      export NAX_BASE="$_NAX_BASE"
       _NAX_TOOL_CONFIG_DIR="$_NAX_BASE_CONFIG_HOME/nix-agents/${target}/bases/$NAX_BASE/profiles/$NAX_PROFILE"
       export NAX_SKILL_VERSIONS="${nixAgentsConfig}/skill-versions.json"
       export NAX_WRAPPER_PID=$$

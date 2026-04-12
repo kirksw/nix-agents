@@ -160,10 +160,7 @@
               fi
             '';
           in
-          # Default config goes to default/default (implicit base)
-          renderOne "default" "default" defaultConfig
-          + "\n"
-          + pkgs.lib.concatStringsSep "\n" (
+          pkgs.lib.concatStringsSep "\n" (
             pkgs.lib.mapAttrsToList (
               profileName: meta: renderOne meta.base profileName meta.storePath
             ) profileMeta
