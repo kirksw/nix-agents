@@ -196,10 +196,26 @@ let
       mkSkillContent =
         name: skill:
         let
+          yamlEscape =
+            s:
+            lib.replaceStrings
+              [
+                "\\"
+                "\""
+                "\n"
+                "\r"
+              ]
+              [
+                "\\\\"
+                "\\\""
+                "\\n"
+                ""
+              ]
+              s;
           frontmatter = ''
             ---
-            name: ${name}
-            description: ${skill.description}
+            name: "${yamlEscape name}"
+            description: "${yamlEscape skill.description}"
             ---
           '';
         in
