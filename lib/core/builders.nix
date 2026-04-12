@@ -190,6 +190,25 @@ let
         else
           skill.content;
 
+      # Build full SKILL.md content: prepend YAML frontmatter with name and description
+      # when skill is defined inline (not via src). This ensures Pi can discover
+      # and load the skill.
+      mkSkillContent =
+        name: skill:
+        let
+          frontmatter = ''
+            ---
+            name: ${name}
+            description: ${skill.description}
+            ---
+          '';
+        in
+        if skill.content == "" then
+          # No content (e.g., skill uses src directly) — use empty body
+          frontmatter
+        else
+          frontmatter + "\n" + skill.content;
+
       writeSkill =
         name: skill:
         if skill.src != null then
@@ -201,7 +220,7 @@ let
         else
           ''
             mkdir -p "$out/skills/${name}"
-            cp ${builtins.toFile "skill-${name}.md" skill.content} "$out/skills/${name}/SKILL.md"
+            cp ${builtins.toFile "skill-${name}.md" (mkSkillContent name skill)} "$out/skills/${name}/SKILL.md"
           '';
 
       commonOutputs = ''
