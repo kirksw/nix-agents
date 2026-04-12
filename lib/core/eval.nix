@@ -11,6 +11,7 @@ lib.evalModules {
     ../../modules/mcp-server.nix
     ../../modules/human.nix
     ../../modules/provider.nix
+    ../../modules/base.nix
     ../../modules/profile.nix
     ../../modules/hook.nix
   ]

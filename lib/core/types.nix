@@ -340,8 +340,46 @@ let
     };
   };
 
+  baseType = types.submodule {
+    options = {
+      stateDir = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = "Override for base runtime state directory. Null uses the target default.";
+      };
+      providers = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = "Provider names scoped to this base. Profiles within this base inherit these providers.";
+      };
+      human = mkOption {
+        type = types.nullOr humanType;
+        default = null;
+        description = "Base-scoped operator context. Profiles inherit this unless they override.";
+      };
+      defaultProfile = mkOption {
+        type = types.str;
+        default = "default";
+        description = "Name of the default profile within this base.";
+      };
+      pathPrefixes = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = "Filesystem path prefixes that activate profiles in this base.";
+      };
+    };
+  };
+
   profileType = types.submodule {
     options = {
+      base = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = ''
+          Base this profile belongs to. When null, the profile uses the implicit
+          "default" base during migration. In the future, this will become required.
+        '';
+      };
       pathPrefixes = mkOption {
         type = types.listOf types.str;
         default = [ ];
@@ -401,6 +439,7 @@ in
     cognitiveStyleType
     humanType
     providerType
+    baseType
     profileType
     ;
   agents = types.attrsOf agentType;
@@ -408,5 +447,6 @@ in
   mcpServers = types.attrsOf mcpServerType;
   hooks = types.listOf hookType;
   providers = types.attrsOf providerType;
+  bases = types.attrsOf baseType;
   profiles = types.attrsOf profileType;
 }
