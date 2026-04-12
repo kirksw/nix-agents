@@ -410,6 +410,9 @@ let
     if src == "env" then
       # ref is the name of the env var to read from; re-export under envVar.
       wrapCredFetch ''"''${${ref}:-}"''
+    else if src == "file" then
+      # ref is a plaintext file path containing the credential.
+      wrapCredFetch ''$(tr -d '[:space:]' < "${ref}" 2>/dev/null) || true''
     else if src == "protonpass" then
       wrapCredFetch ''$(protonpass-cli item get "${ref}" --fields password 2>/dev/null) || true''
     else if src == "apple-keychain" then

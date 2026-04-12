@@ -346,6 +346,7 @@ let
       credentialSource = mkOption {
         type = types.enum [
           "env"
+          "file"
           "protonpass"
           "apple-keychain"
           "sops"

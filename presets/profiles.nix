@@ -4,6 +4,19 @@
 # configuration overlays within a base.
 
 _: {
+  providers = {
+    personal-zai-key = {
+      credentialSource = "file";
+      credentialRef = "/Users/kisw/.config/sops-nix/secrets/zai";
+      envVar = "ZAI_API_KEY";
+    };
+    personal-minimax-key = {
+      credentialSource = "file";
+      credentialRef = "/Users/kisw/.config/sops-nix/secrets/minimax";
+      envVar = "MINIMAX_API_KEY";
+    };
+  };
+
   bases = {
     # personal — personal projects, full agent access, own credentials
     personal = {
@@ -11,7 +24,10 @@ _: {
         "~/src/"
         "~/projects/"
       ];
-      providers = [ ];
+      providers = [
+        "personal-zai-key"
+        "personal-minimax-key"
+      ];
       defaultProfile = "stable";
       git = {
         userName = "Kirk Sweeney";
