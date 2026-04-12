@@ -27,6 +27,29 @@
     touch $out
   '';
 
+  # All skills must have YAML frontmatter with name and description (Pi requirement)
+  eval-skill-frontmatter = pkgs.runCommand "eval-skill-frontmatter" { } ''
+    ok=1
+    for skill_dir in ${opencodeConfig}/skills/*/; do
+      md="$skill_dir/SKILL.md"
+      if [ -f "$md" ]; then
+        # Check for --- fence, name: and description: in frontmatter
+        if ! head -5 "$md" | grep -q '^---'; then
+          echo "FAIL: Missing frontmatter fence in $md" >&2
+          ok=0
+        elif ! grep -q '^name: ' "$md"; then
+          echo "FAIL: Missing name field in $md frontmatter" >&2
+          ok=0
+        elif ! grep -q '^description: ' "$md"; then
+          echo "FAIL: Missing description field in $md frontmatter" >&2
+          ok=0
+        fi
+      fi
+    done
+    [ "$ok" = "1" ] || exit 1
+    touch $out
+  '';
+
   # All expected agents must be present in generated output
   eval-agent-files = pkgs.runCommand "eval-agent-files" { } ''
     ok=1
