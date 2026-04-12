@@ -461,6 +461,25 @@ in
         ) profileMeta
       );
 
+      # Deterministic fallback when no profile is detected.
+      # Prefer personal-default when available so personal projects outside
+      # known prefixes still get a valid base/profile config path.
+      fallbackProfileName =
+        if hasProfiles && profileMeta ? "personal-default" then
+          "personal-default"
+        else if hasProfiles && profileMeta ? "personal-stable" then
+          "personal-stable"
+        else if hasProfiles then
+          lib.head (builtins.attrNames profileMeta)
+        else
+          null;
+
+      fallbackProfileMeta =
+        if fallbackProfileName != null then
+          profileMeta.${fallbackProfileName}
+        else
+          null;
+
       profileDetectionBlock = lib.optionalString hasProfiles ''
         if [ -z "$_NAX_PROFILE" ]; then
           _d="$PWD"
@@ -486,7 +505,16 @@ in
         ${profileDetectionBlock}
         case "''${_NAX_PROFILE:-}" in
         ${profilePathCaseArms}
-          *) _NAX_CONFIG="${agentSystem}" ;;
+          *)
+            ${lib.optionalString (fallbackProfileMeta != null) ''
+              _NAX_PROFILE="${fallbackProfileName}"
+              _NAX_CONFIG=${fallbackProfileMeta.storePath}
+              _NAX_BASE="${fallbackProfileMeta.base}"
+            ''}
+            ${lib.optionalString (fallbackProfileMeta == null) ''
+              _NAX_CONFIG="${agentSystem}"
+            ''}
+            ;;
         esac
       '';
 

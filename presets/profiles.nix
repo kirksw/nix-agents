@@ -28,7 +28,7 @@ _: {
         "~/projects/lunar/"
       ];
       providers = [ ];
-      defaultProfile = "stable";
+      defaultProfile = "default";
       git = {
         userName = "Kirk Sweeney";
         userEmail = "kisw@lunar.app";
@@ -41,7 +41,7 @@ _: {
   profiles = {
     # --- personal profiles ---
 
-    personal-stable = {
+    personal-default = {
       base = "personal";
       pathPrefixes = [ ];
       agents = [ ]; # empty = all
@@ -53,7 +53,7 @@ _: {
     # --- work profiles ---
 
     # work/stable: conservative model tiers, stricter permissions
-    work-stable = {
+    work-default = {
       base = "work";
       pathPrefixes = [ ];
       agents = [
