@@ -219,4 +219,206 @@
     fi
     touch $out
   '';
+
+  # --------------------------------------------------------------------------
+  # ADR-0001 base/profile model evals
+  # --------------------------------------------------------------------------
+
+  # Flat profile names resolve to default base when no base field is set.
+  # This is the backward-compatibility path — existing configs must continue
+  # to work without any bases defined.
+  eval-base-profile-resolution =
+    let
+      lib' = pkgs.lib;
+      types = import ../lib/core/types.nix { lib = lib'; };
+      evalModules = import ../lib/core/eval.nix {
+        lib = lib';
+        inherit types;
+      };
+      builders = import ../lib/core/builders.nix {
+        lib = lib';
+        inherit evalModules;
+      };
+
+      cfg =
+        (evalModules {
+          modules = [
+            {
+              providers.test-cred = {
+                credentialSource = "env";
+                credentialRef = "TEST_KEY";
+                envVar = "TEST_KEY";
+              };
+              profiles.alpha.pathPrefixes = [ "~/alpha/" ];
+              profiles.beta.pathPrefixes = [ "~/beta/" ];
+            }
+          ];
+        }).config;
+      rbp = builders.resolveBaseProfile cfg;
+      r1 = rbp "alpha";
+      r2 = rbp "beta";
+      r3 = rbp "work/stable";
+    in
+    pkgs.runCommand "eval-base-profile-resolution" { } ''
+      # Flat profiles with no base field -> default base
+      [ "${r1.base}" = "default" ] || { echo "FAIL: expected base=default got ${r1.base}" >&2; exit 1; }
+      [ "${r1.profile}" = "alpha" ] || { echo "FAIL: expected profile=alpha got ${r1.profile}" >&2; exit 1; }
+      [ "${r2.base}" = "default" ] || { echo "FAIL: expected base=default got ${r2.base}" >&2; exit 1; }
+      [ "${r2.profile}" = "beta" ] || { echo "FAIL: expected profile=beta got ${r2.profile}" >&2; exit 1; }
+      # Explicit base/profile format
+      [ "${r3.base}" = "work" ] || { echo "FAIL: expected base=work got ${r3.base}" >&2; exit 1; }
+      [ "${r3.profile}" = "stable" ] || { echo "FAIL: expected profile=stable got ${r3.profile}" >&2; exit 1; }
+      touch $out
+    '';
+
+  # Bases with providers scope provider access — profiles within a base
+  # inherit base providers, and mkProfileMeta merges them correctly.
+  eval-base-provider-isolation =
+    let
+      lib' = pkgs.lib;
+      types = import ../lib/core/types.nix { lib = lib'; };
+      evalModules = import ../lib/core/eval.nix {
+        lib = lib';
+        inherit types;
+      };
+      builders = import ../lib/core/builders.nix {
+        lib = lib';
+        inherit evalModules;
+      };
+
+      testModules = [
+        {
+          providers.work-key = {
+            credentialSource = "env";
+            credentialRef = "WORK_KEY";
+            envVar = "WORK_KEY";
+          };
+          providers.personal-key = {
+            credentialSource = "env";
+            credentialRef = "PERSONAL_KEY";
+            envVar = "PERSONAL_KEY";
+          };
+          bases.work.providers = [ "work-key" ];
+          bases.personal.providers = [ "personal-key" ];
+          profiles = {
+            work-stable = {
+              base = "work";
+              providers = [ ];
+              agents = [ ];
+              skills = [ ];
+              mcpServers = [ ];
+            };
+            work-team = {
+              base = "work";
+              providers = [ ];
+              agents = [ ];
+              skills = [ ];
+              mcpServers = [ ];
+            };
+            personal-stable = {
+              base = "personal";
+              providers = [ ];
+              agents = [ ];
+              skills = [ ];
+              mcpServers = [ ];
+            };
+          };
+          agents.test-agent = {
+            description = "test";
+            model = "fast";
+            prompt = "test";
+          };
+        }
+      ];
+
+      meta = builders.mkProfileMeta {
+        inherit pkgs;
+        modules = testModules;
+        target = "opencode";
+      };
+
+      # Extract base and provider count for each profile
+      wsBase = meta.work-stable.base;
+      wtBase = meta.work-team.base;
+      psBase = meta.personal-stable.base;
+      wsProvCount = builtins.toString (builtins.length meta.work-stable.providers);
+      wtProvCount = builtins.toString (builtins.length meta.work-team.providers);
+      psProvCount = builtins.toString (builtins.length meta.personal-stable.providers);
+    in
+    pkgs.runCommand "eval-base-provider-isolation" { } ''
+      # Work profiles share work base
+      [ "${wsBase}" = "work" ] || { echo "FAIL: work-stable base=${wsBase}" >&2; exit 1; }
+      [ "${wtBase}" = "work" ] || { echo "FAIL: work-team base=${wtBase}" >&2; exit 1; }
+      # Personal profile has personal base
+      [ "${psBase}" = "personal" ] || { echo "FAIL: personal-stable base=${psBase}" >&2; exit 1; }
+      # Each profile inherits exactly 1 provider from its base
+      [ "${wsProvCount}" = "1" ] || { echo "FAIL: work-stable providers=${wsProvCount}" >&2; exit 1; }
+      [ "${wtProvCount}" = "1" ] || { echo "FAIL: work-team providers=${wtProvCount}" >&2; exit 1; }
+      [ "${psProvCount}" = "1" ] || { echo "FAIL: personal-stable providers=${psProvCount}" >&2; exit 1; }
+      touch $out
+    '';
+
+  # Two bases must not share the same stateDir. Validation must reject this.
+  eval-base-state-dir-uniqueness =
+    let
+      lib' = pkgs.lib;
+      types = import ../lib/core/types.nix { lib = lib'; };
+      evalModules = import ../lib/core/eval.nix {
+        lib = lib';
+        inherit types;
+      };
+
+      # This should throw because two bases share the same stateDir
+      evaluated = evalModules {
+        modules = [
+          {
+            bases = {
+              a.stateDir = "/shared/state";
+              b.stateDir = "/shared/state";
+            };
+          }
+        ];
+      };
+      result = builtins.tryEval evaluated.config._validated;
+    in
+    pkgs.runCommand "eval-base-state-dir-uniqueness" { } ''
+      ${
+        if result.success then
+          "echo 'FAIL: duplicate stateDir should have been rejected' >&2; exit 1"
+        else
+          "# Correctly rejected"
+      }
+      touch $out
+    '';
+
+  # Profile referencing a nonexistent base must fail at eval time.
+  eval-base-nonexistent-reject =
+    let
+      lib' = pkgs.lib;
+      types = import ../lib/core/types.nix { lib = lib'; };
+      evalModules = import ../lib/core/eval.nix {
+        lib = lib';
+        inherit types;
+      };
+
+      evaluated = evalModules {
+        modules = [
+          {
+            profiles.test = {
+              base = "nonexistent";
+            };
+          }
+        ];
+      };
+      result = builtins.tryEval evaluated.config._validated;
+    in
+    pkgs.runCommand "eval-base-nonexistent-reject" { } ''
+      ${
+        if result.success then
+          "echo 'FAIL: nonexistent base should have been rejected' >&2; exit 1"
+        else
+          "# Correctly rejected"
+      }
+      touch $out
+    '';
 }
