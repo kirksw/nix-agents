@@ -22,10 +22,38 @@ let
     else
       opencodeGenerator;
 
+  # Normalize a profile identifier into { base, profile }.
+  # Accepts both "<base>/<profile>" and flat names ("<profile>").
+  # Flat names are resolved to "<profile>.base" if set, otherwise "default/<profile>".
+  resolveBaseProfile =
+    config: profileName:
+    let
+      parts = lib.splitString "/" profileName;
+    in
+    if builtins.length parts > 1 then
+      # Explicit <base>/<profile> format
+      {
+        base = lib.head parts;
+        profile = lib.concatStringsSep "/" (lib.tail parts);
+      }
+    else
+      # Flat name — check if profile declares a base, otherwise implicit "default"
+      let
+        profileCfg = config.profiles.${profileName} or null;
+        baseName = if profileCfg != null && profileCfg.base != null then profileCfg.base else "default";
+      in
+      {
+        base = baseName;
+        profile = profileName;
+      };
+
   # Resolve a named profile against the full config, returning a filtered/overridden config.
+  # Base-aware: merges base-scoped providers, human, and pathPrefixes when applicable.
   resolveProfile =
     config: profileName:
     let
+      resolved = resolveBaseProfile config profileName;
+      baseCfg = config.bases.${resolved.base} or null;
       profile = config.profiles.${profileName};
 
       filterByWhitelist =
@@ -35,7 +63,18 @@ let
         else
           lib.filterAttrs (name: _: builtins.elem name whitelist) attrset;
 
-      resolvedHuman = if profile.human != null then profile.human else config.human;
+      # Merge base + profile providers (profile adds to base, deduped)
+      baseProviders = if baseCfg != null then baseCfg.providers else [ ];
+      mergedProviderNames = lib.unique (baseProviders ++ profile.providers);
+
+      # Human resolution: profile > base > system
+      resolvedHuman =
+        if profile.human != null then
+          profile.human
+        else if baseCfg != null && baseCfg.human != null then
+          baseCfg.human
+        else
+          config.human;
 
       resolvedTierMapping = config.tierMapping // profile.tierMapping;
 
@@ -75,6 +114,10 @@ let
       human = resolvedHuman;
       tierMapping = resolvedTierMapping;
       defaultPermissions = resolvedDefaultPermissions;
+      # Expose the resolved base name and merged provider list for downstream consumers.
+      # These are used by mkProfileMeta and mkWrappedTool for base-scoped state.
+      _resolvedBase = resolved.base;
+      _resolvedProviders = mergedProviderNames;
     };
 
   mkAgentSystem =
@@ -239,9 +282,16 @@ let
     '';
 
   # Build profile metadata for use with mkWrappedTool.
-  # Returns an attrset of profileName -> { storePath, pathPrefixes } for all
-  # profiles defined in the evaluated modules. Delegates to mkAgentSystem so
-  # there is a single code path for building per-profile store paths.
+  # Returns an attrset of profileName -> { storePath, pathPrefixes, providers, base }
+  # for all profiles defined in the evaluated modules.
+  # Delegates to mkAgentSystem so there is a single code path for building
+  # per-profile store paths.
+  #
+  # Each entry includes:
+  #   storePath    — nix store path with generated config
+  #   pathPrefixes — filesystem prefixes for profile auto-detection
+  #   providers    — resolved provider objects (base + profile merged, deduped)
+  #   base         — resolved base name ("default" for flat profiles)
   mkProfileMeta =
     {
       pkgs,
@@ -267,10 +317,23 @@ let
           ;
         profile = name;
       };
-      inherit (profile) pathPrefixes;
-      # Resolve provider names to full provider objects so mkWrappedTool
-      # can generate credential-resolution shell code at build time.
-      providers = map (pname: evaluated.config.providers.${pname}) profile.providers;
+      pathPrefixes =
+        let
+          # Merge base pathPrefixes + profile pathPrefixes
+          baseCfg = evaluated.config.bases.${(resolveBaseProfile evaluated.config name).base} or null;
+          basePrefixes = if baseCfg != null then baseCfg.pathPrefixes else [ ];
+        in
+        lib.unique (basePrefixes ++ profile.pathPrefixes);
+      # Resolve providers: merge base + profile provider names, dedupe, then
+      # resolve to full provider objects for mkWrappedTool credential generation.
+      providers =
+        let
+          baseCfg = evaluated.config.bases.${(resolveBaseProfile evaluated.config name).base} or null;
+          baseProviderNames = if baseCfg != null then baseCfg.providers else [ ];
+          mergedNames = lib.unique (baseProviderNames ++ profile.providers);
+        in
+        map (pname: evaluated.config.providers.${pname}) mergedNames;
+      inherit ((resolveBaseProfile evaluated.config name)) base;
     }) evaluated.config.profiles;
 
   # Generate a shell snippet that resolves one provider's credential and
@@ -317,7 +380,7 @@ let
 
 in
 {
-  inherit mkAgentSystem mkProfileMeta;
+  inherit mkAgentSystem mkProfileMeta resolveBaseProfile;
 
   mkWrappedTool =
     {
