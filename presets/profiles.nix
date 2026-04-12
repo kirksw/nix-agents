@@ -13,6 +13,12 @@ _: {
       ];
       providers = [ ];
       defaultProfile = "stable";
+      git = {
+        userName = "Kirk Sweeney";
+        userEmail = "kirk@cntd.io";
+        signingKey = "/Users/kisw/.config/sops-nix/secrets/ssh/kirksw/private";
+        gpgFormat = "ssh";
+      };
     };
 
     # work — work projects, restricted agent set, shared work credentials
@@ -23,6 +29,12 @@ _: {
       ];
       providers = [ ];
       defaultProfile = "stable";
+      git = {
+        userName = "Kirk Sweeney";
+        userEmail = "kisw@lunar.app";
+        signingKey = "/Users/kisw/.config/sops-nix/secrets/ssh/lunarway/private";
+        gpgFormat = "ssh";
+      };
     };
   };
 

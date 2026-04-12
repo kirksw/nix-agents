@@ -338,6 +338,12 @@ let
           mergedNames = lib.unique (baseProviderNames ++ profile.providers);
         in
         map (pname: evaluated.config.providers.${pname}) mergedNames;
+      # Resolve git identity from base.
+      git =
+        let
+          baseCfg = evaluated.config.bases.${(resolveBaseProfile evaluated.config name).base} or null;
+        in
+        if baseCfg != null && baseCfg.git != null then baseCfg.git else null;
       inherit ((resolveBaseProfile evaluated.config name)) base;
     }) evaluated.config.profiles;
 
@@ -485,6 +491,32 @@ in
           ${arms}  esac
         '';
 
+      # Generate per-profile git identity exports as a case statement.
+      # Sets GIT_AUTHOR/COMMITTER env vars so commits from subagents use the
+      # correct identity for the active base.
+      gitIdentityBlock =
+        let
+          mkGitArm =
+            name: meta:
+            lib.optionalString (meta.git != null) ''
+                ${name})
+                  export GIT_AUTHOR_NAME="${meta.git.userName}"
+                  export GIT_AUTHOR_EMAIL="${meta.git.userEmail}"
+                  export GIT_COMMITTER_NAME="${meta.git.userName}"
+                  export GIT_COMMITTER_EMAIL="${meta.git.userEmail}"
+                  ${lib.optionalString (meta.git.signingKey != null) ''
+                    export GIT_AUTHOR_SIGNINGKEY="${meta.git.signingKey}"
+                    export GIT_COMMITTER_SIGNINGKEY="${meta.git.signingKey}"
+                  ''}
+                  ;;
+            '';
+          arms = lib.concatStrings (lib.mapAttrsToList mkGitArm profileMeta);
+        in
+        lib.optionalString (hasProfiles && arms != "") ''
+          case "''${_NAX_PROFILE:-}" in
+          ${arms}  esac
+        '';
+
       # The config store path used throughout the rest of the wrapper.
       # Statically embedded when there are no profiles, runtime variable when there are.
       nixAgentsConfig = if hasProfiles then "$_NAX_CONFIG" else "${agentSystem}";
@@ -492,6 +524,7 @@ in
     pkgs.writeShellScriptBin binName ''
       ${profileBlock}
       ${credentialBlock}
+      ${gitIdentityBlock}
       _NAX_HOOKS="${nixAgentsConfig}/hook-manifest"
       _NAX_BASE_CONFIG_HOME="''${XDG_CONFIG_HOME:-$HOME/.config}"
       _NAX_BASE_DATA_HOME="''${XDG_DATA_HOME:-$HOME/.local/share}"

@@ -293,6 +293,29 @@ let
     "visual"
   ];
 
+  gitIdentityType = types.submodule {
+    options = {
+      userName = mkOption {
+        type = types.str;
+        description = "Git user.name for commits in this base.";
+      };
+      userEmail = mkOption {
+        type = types.str;
+        description = "Git user.email for commits in this base.";
+      };
+      signingKey = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = "Path or ID of the git signing key. Null disables signing env hint.";
+      };
+      gpgFormat = mkOption {
+        type = types.enum [ "openpgp" "ssh" "x509" ];
+        default = "ssh";
+        description = "Git gpg.format value.";
+      };
+    };
+  };
+
   humanType = types.submodule {
     options = {
       name = mkOption {
@@ -356,6 +379,11 @@ let
         type = types.nullOr humanType;
         default = null;
         description = "Base-scoped operator context. Profiles inherit this unless they override.";
+      };
+      git = mkOption {
+        type = types.nullOr gitIdentityType;
+        default = null;
+        description = "Git identity for commits in this base. Exported as GIT_AUTHOR/COMMITTER env vars by wrappers.";
       };
       defaultProfile = mkOption {
         type = types.str;
@@ -436,6 +464,7 @@ in
     mcpServerType
     eventType
     hookType
+    gitIdentityType
     cognitiveStyleType
     humanType
     providerType
