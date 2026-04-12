@@ -412,6 +412,101 @@
               ${pkgs.deadnix}/bin/deadnix --fail .
             ''}/bin/lint";
           };
+
+          # Migrate Pi runtime state from global ~/.pi/agent/ to
+          # base-scoped ~/.pi/agent/bases/<base>/ layout (ADR-0001).
+          # Safe to run multiple times — skips already-migrated state.
+          migrate = {
+            type = "app";
+            program = "${pkgs.writeShellScriptBin "migrate" ''
+              set -euo pipefail
+
+              PI_DIR="$HOME/.pi/agent"
+              BASES_DIR="$PI_DIR/bases"
+
+              if [ ! -d "$PI_DIR" ]; then
+                echo "No Pi agent directory found at $PI_DIR. Nothing to migrate."
+                exit 0
+              fi
+
+              # Check if already migrated
+              if [ -d "$BASES_DIR" ]; then
+                echo "Base-scoped directory already exists at $BASES_DIR"
+                echo "Existing bases:"
+                ls -1 "$BASES_DIR" 2>/dev/null || true
+                echo ""
+                echo "To migrate an additional base, run:"
+                echo "  nix run .#migrate"
+                echo ""
+              fi
+
+              # Determine base name
+              echo "Enter a base name for the existing Pi state (default: default):"
+              read -r BASE_NAME
+              BASE_NAME="''${BASE_NAME:-default}"
+
+              if [ -z "$BASE_NAME" ]; then
+                echo "Base name cannot be empty."
+                exit 1
+              fi
+
+              BASE_DIR="$BASES_DIR/$BASE_NAME"
+
+              if [ -d "$BASE_DIR" ]; then
+                echo "Base '$BASE_NAME' already exists at $BASE_DIR. Aborting."
+                exit 1
+              fi
+
+              echo ""
+              echo "This will:"
+              echo "  1. Create $BASE_DIR/"
+              echo "  2. Move auth.json, models.json, settings.json to $BASE_DIR/"
+              echo "  3. Move sessions/ to $BASE_DIR/sessions/"
+              echo "  4. Create backward-compat symlinks from $PI_DIR to $BASE_DIR"
+              echo ""
+              echo "Continue? [y/N]"
+              read -r CONFIRM
+              if [ "$CONFIRM" != "y" ] && [ "$CONFIRM" != "Y" ]; then
+                echo "Aborted."
+                exit 0
+              fi
+
+              mkdir -p "$BASE_DIR"
+
+              # Move state files
+              for f in auth.json models.json settings.json; do
+                if [ -f "$PI_DIR/$f" ] && [ ! -L "$PI_DIR/$f" ]; then
+                  echo "  Moving $f -> $BASE_DIR/$f"
+                  mv "$PI_DIR/$f" "$BASE_DIR/$f"
+                  ln -sfn "$BASE_DIR/$f" "$PI_DIR/$f"
+                  echo "  Created compat symlink $PI_DIR/$f -> $BASE_DIR/$f"
+                elif [ -L "$PI_DIR/$f" ]; then
+                  echo "  Skipping $f (already a symlink)"
+                else
+                  echo "  Skipping $f (not found)"
+                fi
+              done
+
+              # Move sessions
+              if [ -d "$PI_DIR/sessions" ] && [ ! -L "$PI_DIR/sessions" ]; then
+                echo "  Moving sessions/ -> $BASE_DIR/sessions/"
+                mv "$PI_DIR/sessions" "$BASE_DIR/sessions"
+                ln -sfn "$BASE_DIR/sessions" "$PI_DIR/sessions"
+                echo "  Created compat symlink $PI_DIR/sessions -> $BASE_DIR/sessions"
+              elif [ -L "$PI_DIR/sessions" ]; then
+                echo "  Skipping sessions/ (already a symlink)"
+              else
+                echo "  Skipping sessions/ (not found)"
+              fi
+
+              echo ""
+              echo "Migration complete. Base '$BASE_NAME' now owns:"
+              ls -la "$BASE_DIR/" 2>/dev/null || true
+              echo ""
+              echo "Backward-compat symlinks left in $PI_DIR for old wrappers."
+              echo "Remove them manually once all wrappers are updated."
+            ''}/bin/migrate";
+          };
         };
 
         devShells.default = pkgs.mkShell {
