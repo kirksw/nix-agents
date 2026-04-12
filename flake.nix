@@ -143,26 +143,30 @@
             optionalTrees ? [ ],
           }:
           let
-            renderOne = profileName: storePath: ''
+            # Sync one profile's store path to the base/profile directory layout.
+            renderOne = base: profileName: storePath: ''
               if [ -d "${storePath}" ]; then
-                echo "Syncing ${label} to $NIX_AGENTS_DIR/${targetName}/profiles/${profileName}..."
-                sync_tree "${storePath}/agents" "$NIX_AGENTS_DIR/${targetName}/profiles/${profileName}/agents"
-                sync_tree "${storePath}/skills" "$NIX_AGENTS_DIR/${targetName}/profiles/${profileName}/skills"
+                echo "Syncing ${label} to $NIX_AGENTS_DIR/${targetName}/bases/${base}/profiles/${profileName}..."
+                sync_tree "${storePath}/agents" "$NIX_AGENTS_DIR/${targetName}/bases/${base}/profiles/${profileName}/agents"
+                sync_tree "${storePath}/skills" "$NIX_AGENTS_DIR/${targetName}/bases/${base}/profiles/${profileName}/skills"
                 ${pkgs.lib.concatMapStringsSep "\n" (
                   file:
-                  ''sync_file "${storePath}/${file.source}" "$NIX_AGENTS_DIR/${targetName}/profiles/${profileName}/${file.target}"''
+                  ''sync_file "${storePath}/${file.source}" "$NIX_AGENTS_DIR/${targetName}/bases/${base}/profiles/${profileName}/${file.target}"''
                 ) files}
                 ${pkgs.lib.concatMapStringsSep "\n" (
                   tree:
-                  ''sync_optional_tree "${storePath}/${tree.source}" "$NIX_AGENTS_DIR/${targetName}/profiles/${profileName}/${tree.target}"''
+                  ''sync_optional_tree "${storePath}/${tree.source}" "$NIX_AGENTS_DIR/${targetName}/bases/${base}/profiles/${profileName}/${tree.target}"''
                 ) optionalTrees}
               fi
             '';
           in
-          renderOne "default" defaultConfig
+          # Default config goes to default/default (implicit base)
+          renderOne "default" "default" defaultConfig
           + "\n"
           + pkgs.lib.concatStringsSep "\n" (
-            pkgs.lib.mapAttrsToList (profileName: meta: renderOne profileName meta.storePath) profileMeta
+            pkgs.lib.mapAttrsToList (profileName: meta:
+              renderOne meta.base profileName meta.storePath
+            ) profileMeta
           );
 
         syncAgents = pkgs.writeShellScriptBin "sync-agents" ''
@@ -591,11 +595,20 @@
               }
             }/bin/pi
 
-            grep -q 'opencode/profiles/\$_NAX_PROFILE' "$opencode_wrapper"
-            grep -q 'nix-agents/claude\$_NAX_PROFILE_SUFFIX' "$claude_wrapper"
-            grep -q 'nix-agents/codex\$_NAX_PROFILE_SUFFIX' "$codex_wrapper"
-            grep -q 'nix-agents/pi\$_NAX_PROFILE_SUFFIX' "$pi_wrapper"
-            grep -q '\$HOME/.pi/agent' "$pi_wrapper"
+            # All wrappers must use the base/profile directory layout
+            grep -q 'bases/\$NAX_BASE/profiles/\$NAX_PROFILE' "$opencode_wrapper"
+            grep -q 'bases/\$NAX_BASE/profiles/\$NAX_PROFILE' "$claude_wrapper"
+            grep -q 'bases/\$NAX_BASE/profiles/\$NAX_PROFILE' "$codex_wrapper"
+            grep -q 'bases/\$NAX_BASE/profiles/\$NAX_PROFILE' "$pi_wrapper"
+
+            # Pi must use base-scoped shared state
+            grep -q '\$HOME/.pi/agent/bases/\$NAX_BASE' "$pi_wrapper"
+
+            # All wrappers must export NAX_BASE
+            grep -q 'export NAX_BASE=' "$opencode_wrapper"
+            grep -q 'export NAX_BASE=' "$claude_wrapper"
+            grep -q 'export NAX_BASE=' "$codex_wrapper"
+            grep -q 'export NAX_BASE=' "$pi_wrapper"
             touch $out
           '';
 

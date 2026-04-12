@@ -424,9 +424,12 @@ in
         map ({ name, prefix }: "          ${expandPrefix prefix}*) _NAX_PROFILE=${name} ;;") sortedPrefixes
       );
 
-      # case arms: profile name -> store path
+      # case arms: profile name -> (base, store path)
       profilePathCaseArms = lib.concatStringsSep "\n" (
-        lib.mapAttrsToList (name: meta: "          ${name}) _NAX_CONFIG=${meta.storePath} ;;") profileMeta
+        lib.mapAttrsToList (
+          name: meta:
+          "          ${name}) _NAX_CONFIG=${meta.storePath}; _NAX_BASE=\"${meta.base}\" ;;"
+        ) profileMeta
       );
 
       profileDetectionBlock = lib.optionalString hasProfiles ''
@@ -448,9 +451,10 @@ in
       '';
 
       # Emitted at the top of the wrapper when profiles are configured.
-      # Sets _NAX_CONFIG to the appropriate store path based on $PWD.
+      # Sets _NAX_CONFIG and _NAX_BASE based on $PWD.
       profileBlock = lib.optionalString needsProfileSelection ''
         _NAX_PROFILE="${forcedProfile}"
+        _NAX_BASE="default"
         ${profileDetectionBlock}
         case "''${_NAX_PROFILE:-}" in
         ${profilePathCaseArms}
@@ -489,7 +493,8 @@ in
       _NAX_BASE_CONFIG_HOME="''${XDG_CONFIG_HOME:-$HOME/.config}"
       _NAX_BASE_DATA_HOME="''${XDG_DATA_HOME:-$HOME/.local/share}"
       export NAX_PROFILE="''${_NAX_PROFILE:-default}"
-      _NAX_TOOL_CONFIG_DIR="$_NAX_BASE_CONFIG_HOME/nix-agents/${target}/profiles/$NAX_PROFILE"
+      export NAX_BASE="''${_NAX_BASE:-default}"
+      _NAX_TOOL_CONFIG_DIR="$_NAX_BASE_CONFIG_HOME/nix-agents/${target}/bases/$NAX_BASE/profiles/$NAX_PROFILE"
       export NAX_SKILL_VERSIONS="${nixAgentsConfig}/skill-versions.json"
       export NAX_WRAPPER_PID=$$
       _run_hook() {
@@ -529,8 +534,8 @@ in
         _sync_link_file "${nixAgentsConfig}/AGENTS.md" "$_NAX_TOOL_CONFIG_DIR/AGENTS.md"
         _sync_link_file "${nixAgentsConfig}/opencode.json" "$_NAX_TOOL_CONFIG_DIR/opencode.json"
         if [ -n "''${_NAX_PROFILE:-}" ]; then
-          export XDG_CONFIG_HOME="$_NAX_BASE_CONFIG_HOME/opencode/profiles/$_NAX_PROFILE"
-          export XDG_DATA_HOME="$_NAX_BASE_DATA_HOME/opencode/profiles/$_NAX_PROFILE"
+          export XDG_CONFIG_HOME="$_NAX_BASE_CONFIG_HOME/opencode/bases/$NAX_BASE/profiles/$_NAX_PROFILE"
+          export XDG_DATA_HOME="$_NAX_BASE_DATA_HOME/opencode/bases/$NAX_BASE/profiles/$_NAX_PROFILE"
           mkdir -p "$XDG_CONFIG_HOME" "$XDG_DATA_HOME"
         fi
         export OPENCODE_CONFIG="$_NAX_TOOL_CONFIG_DIR/opencode.json"
@@ -539,7 +544,7 @@ in
       fi
 
       if [ "${target}" = "claude" ]; then
-        _nix_agents_dir="$_NAX_BASE_CONFIG_HOME/nix-agents/claude/profiles/$NAX_PROFILE"
+        _nix_agents_dir="$_NAX_BASE_CONFIG_HOME/nix-agents/claude/bases/$NAX_BASE/profiles/$NAX_PROFILE"
         mkdir -p "$_nix_agents_dir"
         _sync_link_dir "${nixAgentsConfig}/agents" "$_nix_agents_dir/agents"
         _sync_link_dir "${nixAgentsConfig}/skills" "$_nix_agents_dir/skills"
@@ -553,7 +558,7 @@ in
       fi
 
       if [ "${target}" = "codex" ]; then
-        _nix_agents_dir="$_NAX_BASE_CONFIG_HOME/nix-agents/codex/profiles/$NAX_PROFILE"
+        _nix_agents_dir="$_NAX_BASE_CONFIG_HOME/nix-agents/codex/bases/$NAX_BASE/profiles/$NAX_PROFILE"
         mkdir -p "$_nix_agents_dir"
         _sync_link_dir "${nixAgentsConfig}/agents" "$_nix_agents_dir/agents"
         _sync_link_dir "${nixAgentsConfig}/skills" "$_nix_agents_dir/skills"
@@ -564,9 +569,9 @@ in
       fi
 
       if [ "${target}" = "pi" ]; then
-        _pi_shared_dir="$HOME/.pi/agent"
-        _pi_profile_dir="$_NAX_BASE_CONFIG_HOME/nix-agents/pi/profiles/$NAX_PROFILE"
-        mkdir -p "$_pi_profile_dir" "$_pi_shared_dir"
+        _pi_base_dir="$HOME/.pi/agent/bases/$NAX_BASE"
+        _pi_profile_dir="$_NAX_BASE_CONFIG_HOME/nix-agents/pi/bases/$NAX_BASE/profiles/$NAX_PROFILE"
+        mkdir -p "$_pi_profile_dir" "$_pi_base_dir"
 
         # Profile-specific content from nix store
         _sync_link_dir "${nixAgentsConfig}/agents" "$_pi_profile_dir/agents"
@@ -575,17 +580,17 @@ in
         _sync_link_dir "${nixAgentsConfig}/extensions" "$_pi_profile_dir/extensions"
         _sync_link_dir "${nixAgentsConfig}/prompts" "$_pi_profile_dir/prompts"
 
-        # Shared state from ~/.pi/agent (credentials, sessions, models, settings)
+        # Shared state from base-scoped dir (credentials, sessions, models, settings)
         if [ ! -e "$_pi_profile_dir/auth.json" ]; then
-          ln -sfn "$_pi_shared_dir/auth.json" "$_pi_profile_dir/auth.json" 2>/dev/null || true
+          ln -sfn "$_pi_base_dir/auth.json" "$_pi_profile_dir/auth.json" 2>/dev/null || true
         fi
         if [ ! -e "$_pi_profile_dir/models.json" ]; then
-          ln -sfn "$_pi_shared_dir/models.json" "$_pi_profile_dir/models.json" 2>/dev/null || true
+          ln -sfn "$_pi_base_dir/models.json" "$_pi_profile_dir/models.json" 2>/dev/null || true
         fi
         if [ ! -e "$_pi_profile_dir/settings.json" ]; then
-          ln -sfn "$_pi_shared_dir/settings.json" "$_pi_profile_dir/settings.json" 2>/dev/null || true
+          ln -sfn "$_pi_base_dir/settings.json" "$_pi_profile_dir/settings.json" 2>/dev/null || true
         fi
-        _sync_link_dir "$_pi_shared_dir/sessions" "$_pi_profile_dir/sessions"
+        _sync_link_dir "$_pi_base_dir/sessions" "$_pi_profile_dir/sessions"
 
         export PI_CODING_AGENT_DIR="$_pi_profile_dir"
         exec "${toolBin}" "$@"
