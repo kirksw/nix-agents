@@ -196,10 +196,26 @@ let
       mkSkillContent =
         name: skill:
         let
+          yamlEscape =
+            s:
+            lib.replaceStrings
+              [
+                "\\"
+                "\""
+                "\n"
+                "\r"
+              ]
+              [
+                "\\\\"
+                "\\\""
+                "\\n"
+                ""
+              ]
+              s;
           frontmatter = ''
             ---
-            name: ${name}
-            description: ${skill.description}
+            name: "${yamlEscape name}"
+            description: "${yamlEscape skill.description}"
             ---
           '';
         in
@@ -394,6 +410,9 @@ let
     if src == "env" then
       # ref is the name of the env var to read from; re-export under envVar.
       wrapCredFetch ''"''${${ref}:-}"''
+    else if src == "file" then
+      # ref is a plaintext file path containing the credential.
+      wrapCredFetch ''$(tr -d '[:space:]' < "${ref}" 2>/dev/null) || true''
     else if src == "protonpass" then
       wrapCredFetch ''$(protonpass-cli item get "${ref}" --fields password 2>/dev/null) || true''
     else if src == "apple-keychain" then
@@ -596,15 +615,22 @@ in
       _sync_link_dir() {
         local source_dir="$1"
         local target_path="$2"
+        if [ -e "$target_path" ]; then
+          chmod -R u+w "$target_path" 2>/dev/null || true
+        fi
         rm -rf "$target_path"
         if [ -d "$source_dir" ]; then
-          cp -R "$source_dir" "$target_path"
+          mkdir -p "$target_path"
+          cp -R "$source_dir"/. "$target_path"/
           chmod -R u+w "$target_path"
         fi
       }
       _sync_link_file() {
         local source_file="$1"
         local target_path="$2"
+        if [ -e "$target_path" ]; then
+          chmod u+w "$target_path" 2>/dev/null || true
+        fi
         rm -rf "$target_path"
         if [ -f "$source_file" ]; then
           cp "$source_file" "$target_path"
