@@ -29,11 +29,17 @@
         #   ${nix-agents}/presets/security.nix  - minimal + bottleneck + code-red
         preset = "${nix-agents}/presets/default.nix";
 
+        # Profile preset options:
+        #   ${nix-agents}/presets/profiles.nix     - flat profiles (legacy, backward compat)
+        #   ${nix-agents}/presets/profiles-v2.nix   - base/profile hierarchy (ADR-0001)
+        profiles = "${nix-agents}/presets/profiles.nix";
+
         myAgentSystem = agentsLib.mkAgentSystem {
           inherit pkgs;
           target = "opencode";
           modules = [
             preset
+            profiles
 
             # Add your own agent definitions
             ./agents/my-agent.nix
@@ -59,6 +65,27 @@
                 transport = "http";
                 url = "https://my-api.example.com/mcp";
               };
+
+              # --- Base/profile example (ADR-0001) ---
+              # Uncomment to define bases with isolated runtime state:
+              #
+              # bases.work = {
+              #   pathPrefixes = [ "~/work/" ];
+              #   providers = [ "work-api-key" ];
+              # };
+              # bases.personal = {
+              #   pathPrefixes = [ "~/src/" "~/projects/" ];
+              #   providers = [ "personal-api-key" ];
+              # };
+              # profiles.work-stable = {
+              #   base = "work";
+              #   agents = [ "code-monkey" "explore" ];
+              #   permissions.webfetch = "deny";
+              # };
+              # profiles.personal-stable = {
+              #   base = "personal";
+              #   # inherits all agents by default
+              # };
             }
           ];
         };
@@ -68,8 +95,19 @@
           target = "claude";
           modules = [
             preset
+            profiles
             ./agents/my-agent.nix
           ];
+        };
+
+        profileMeta = agentsLib.mkProfileMeta {
+          inherit pkgs;
+          modules = [
+            preset
+            profiles
+            ./agents/my-agent.nix
+          ];
+          target = "opencode";
         };
       in
       {
@@ -82,6 +120,7 @@
             target = "opencode";
             tool = agentPkgs.opencode;
             agentSystem = myAgentSystem;
+            profileMeta = profileMeta;
           };
 
           claude = agentsLib.mkWrappedTool {
