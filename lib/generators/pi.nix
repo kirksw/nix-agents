@@ -9,7 +9,10 @@ let
   agentsMdGenerator = import ./agents-md.nix { inherit lib; };
 
   workflowGuide =
-    if src != null then builtins.unsafeDiscardStringContext (builtins.readFile (src + "/AGENTS.md")) else "";
+    if src != null then
+      builtins.unsafeDiscardStringContext (builtins.readFile (src + "/AGENTS.md"))
+    else
+      "";
 in
 {
   inherit (opencodeGenerator) agents skills mcpJson;

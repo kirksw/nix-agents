@@ -10,6 +10,9 @@ export interface Session {
   inputTokens: number | null;
   outputTokens: number | null;
   skillVersions?: Record<string, string>;
+  tier?: string | null;
+  parentAgent?: string | null;
+  delegationDepth?: number | null;
 }
 
 export interface SessionEvent {
@@ -33,6 +36,9 @@ export interface IngestPayload {
   durationSec?: number;
   tokenUsage?: { input: number; output: number };
   skillVersions?: Record<string, string>;
+  tier?: string;
+  parentAgent?: string;
+  delegationDepth?: number;
 }
 
 export interface Summary {

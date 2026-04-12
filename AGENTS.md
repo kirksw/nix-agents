@@ -46,6 +46,24 @@ should be independently committable and describable in one line. This gives `scr
 git log to document from and makes review by `bottleneck` more effective. Commit each chunk
 as you complete it — do not batch unrelated changes into a single commit.
 
+## ADR / RFC Discipline
+
+When making large architectural, workflow, or policy decisions, create an ADR/RFC in `docs/adr/`
+or the appropriate docs location, and link it in follow-up work (PRs, plans, implementation notes).
+After implementing the change, review the touched code paths against the new ADR/RFC to verify
+compliance and capture any intentional deviations.
+
+- ADR index: `docs/adr/README.md`
+- Example: `docs/adr/ADR-0001-base-profile-hierarchy.md`
+
+## Branching and PR Strategy
+
+Use distinct branches per feature/request to keep scope clear and reviewable. If work overlaps,
+prefer a stacked PR approach (base PR + follow-up PRs) rather than mixing unrelated changes.
+
+Before starting a new request, ensure the current work is wrapped up (committed, reviewed as needed,
+and documented) so context and ownership remain clear.
+
 ## Context Management
 
 Use `swe-pruner-mcp` skill when reading large files (>500 lines) or searching codebases with many matches. The MCP tools `read_pruned` and `search_pruned` reduce token usage by 23-54% by returning only context-relevant code.

@@ -9,14 +9,27 @@ let
   shared = import ./shared.nix { inherit lib; };
   preamble = shared.mkHumanPreamble config.human;
 
+  # Derive tool list for tiered agents (orchestrator/manager) based on tier + extraTools.
+  # Employees and flat agents derive tools from permissions (not emitted here — pi reads
+  # permissions from the frontmatter permission block instead).
+  mkTierToolsList =
+    agent:
+    if agent.tier == "orchestrator" || agent.tier == "manager" then
+      [ "subagent" ] ++ agent.extraTools
+    else
+      null; # null = no tools: line emitted; pi infers from permissions block
+
   workflowGuide =
-    if src != null then builtins.unsafeDiscardStringContext (builtins.readFile (src + "/AGENTS.md")) else "";
+    if src != null then
+      builtins.unsafeDiscardStringContext (builtins.readFile (src + "/AGENTS.md"))
+    else
+      "";
 
   generatorDefaults = {
-    fast = "anthropic/claude-haiku-4-5-20251001";
-    balanced = "anthropic/claude-sonnet-4-6";
-    powerful = "google/gemini-2.5-pro";
-    reasoning = "anthropic/claude-opus-4-6";
+    fast = "minimax/minimax-m2.7-highspeed";
+    balanced = "openai/gpt-5.3-codex";
+    powerful = "zai/glm-5.1";
+    reasoning = "zai/glm-5.1";
   };
   tierModels = generatorDefaults // config.tierMapping;
   resolveModel = m: tierModels.${m} or m;
@@ -63,6 +76,18 @@ let
         "temperature: ${toString agent.temperature}"
       ]
       ++ lib.optional (agent.reasoningEffort != null) "reasoningEffort: ${agent.reasoningEffort}"
+      ++ (
+        let
+          toolsList = mkTierToolsList agent;
+        in
+        lib.optional (toolsList != null) "tools: ${lib.concatStringsSep "," toolsList}"
+      )
+      ++ lib.optional (
+        agent.managedAgents != [ ]
+      ) "visibleAgents: ${lib.concatStringsSep "," agent.managedAgents}"
+      ++ lib.optional (
+        agent.maxDelegationDepth != null
+      ) "maxDelegationDepth: ${toString agent.maxDelegationDepth}"
       ++ [ "permission:" ]
       ++ [
         (renderPermField 2 "edit" (resolvePermField "edit" agent.permissions.edit))
@@ -74,7 +99,13 @@ let
     in
     "---\n${lib.concatStringsSep "\n" lines}\n---";
 
-  agentsOutput = lib.mapAttrs (name: agent: renderFrontmatter name agent + "\n" + preamble + agent.prompt + "\n") config.agents;
+  agentsOutput = lib.mapAttrs (
+    name: agent:
+    let
+      managedSection = shared.mkManagedAgentsSection config.agents agent.managedAgents;
+    in
+    renderFrontmatter name agent + "\n" + preamble + agent.prompt + "\n" + managedSection
+  ) config.agents;
 
   skillSkel = lib.mapAttrs (
     name: skill:
@@ -86,7 +117,7 @@ let
     if server.command != [ ] then
       server.command
     else if server.package != null then
-      [ "${server.package}/bin/${name}" ]
+      [ "${server.package}/bin/${name}" ] ++ server.args
     else
       [ ];
 

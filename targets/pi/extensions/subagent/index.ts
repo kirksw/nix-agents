@@ -227,6 +227,8 @@ async function runSingleAgent(
   signal: AbortSignal | undefined,
   onUpdate: OnUpdateCallback | undefined,
   makeDetails: (results: SingleResult[]) => SubagentDetails,
+  currentDepth: number,
+  maxDepth: number,
 ): Promise<SingleResult> {
   const agent = agents.find((a) => a.name === agentName);
 
@@ -284,7 +286,15 @@ async function runSingleAgent(
     let wasAborted = false;
 
     const exitCode = await new Promise<number>((resolve) => {
-      const proc = spawn("pi", args, { cwd: cwd ?? defaultCwd, shell: false, stdio: ["ignore", "pipe", "pipe"] });
+      const env = {
+        ...process.env,
+        PI_AGENT_NAME: agentName,
+        PI_TIER_DEPTH: String(currentDepth + 1),
+        PI_MAX_TIER_DEPTH: String(maxDepth),
+        PI_AGENT_TIER: agent.source === "user" || agent.source === "project" ? (agent as any).tier || "" : "",
+        PI_PARENT_AGENT: process.env.PI_AGENT_NAME || "",
+      };
+      const proc = spawn("pi", args, { cwd: cwd ?? defaultCwd, shell: false, stdio: ["ignore", "pipe", "pipe"], env });
       let buffer = "";
 
       const processLine = (line: string) => {
@@ -420,8 +430,41 @@ export default function (pi: ExtensionAPI) {
     async execute(_toolCallId, params, signal, onUpdate, ctx) {
       const agentScope: AgentScope = params.agentScope ?? "user";
       const discovery = discoverAgents(ctx.cwd, agentScope);
-      const agents = discovery.agents;
       const confirmProjectAgents = params.confirmProjectAgents ?? true;
+
+      // Depth circuit breaker
+      const currentDepth = parseInt(process.env.PI_TIER_DEPTH || "0", 10);
+      const callerName = process.env.PI_AGENT_NAME;
+      const callerAgent = callerName ? discovery.agents.find((a) => a.name === callerName) : null;
+      const agentMaxDepth = callerAgent?.maxDelegationDepth;
+      const maxDepth = agentMaxDepth !== undefined
+        ? agentMaxDepth
+        : parseInt(process.env.PI_MAX_TIER_DEPTH || "5", 10);
+
+      if (currentDepth >= maxDepth) {
+        const hasChain2 = (params.chain?.length ?? 0) > 0;
+        const hasTasks2 = (params.tasks?.length ?? 0) > 0;
+        const makeDetailsEarly =
+          (mode: "single" | "parallel" | "chain") =>
+          (_results: SingleResult[]): SubagentDetails => ({
+            mode,
+            agentScope,
+            projectAgentsDir: discovery.projectAgentsDir,
+            results: [],
+          });
+        return {
+          content: [{ type: "text", text: `Delegation depth limit reached (${maxDepth}). Cannot spawn further subagents.` }],
+          details: makeDetailsEarly(hasChain2 ? "chain" : hasTasks2 ? "parallel" : "single")([]),
+          isError: true,
+        };
+      }
+
+      // Visibility filtering: if the calling agent has a visibleAgents list, restrict
+      // which agents are discoverable. Use unfiltered discovery.agents to find the caller.
+      const visibleAgentNames = callerAgent?.visibleAgents;
+      const agents = visibleAgentNames
+        ? discovery.agents.filter((a) => visibleAgentNames.includes(a.name))
+        : discovery.agents;
 
       const hasChain = (params.chain?.length ?? 0) > 0;
       const hasTasks = (params.tasks?.length ?? 0) > 0;
@@ -506,6 +549,8 @@ export default function (pi: ExtensionAPI) {
             signal,
             chainUpdate,
             makeDetails("chain"),
+            currentDepth,
+            maxDepth,
           );
           results.push(result);
 
@@ -583,6 +628,8 @@ export default function (pi: ExtensionAPI) {
               }
             },
             makeDetails("parallel"),
+            currentDepth,
+            maxDepth,
           );
           allResults[index] = result;
           emitParallelUpdate();
@@ -617,6 +664,8 @@ export default function (pi: ExtensionAPI) {
           signal,
           onUpdate,
           makeDetails("single"),
+          currentDepth,
+          maxDepth,
         );
         const isError = result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
         if (isError) {

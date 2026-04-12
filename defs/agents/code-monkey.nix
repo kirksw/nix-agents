@@ -3,6 +3,7 @@
     description = "Handles the majority of engineering tasks — implementation, bug fixes, refactors, and maintenance.";
     mode = "subagent";
     model = "balanced";
+    tier = "employee";
     temperature = 0.2;
     prompt = ''
       You are a software engineer and the primary workhorse for all engineering tasks.

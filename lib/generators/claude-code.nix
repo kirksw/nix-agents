@@ -123,7 +123,7 @@ let
     if server.command != [ ] then
       server.command
     else if server.package != null then
-      [ "${server.package}/bin/${name}" ]
+      [ "${server.package}/bin/${name}" ] ++ server.args
     else
       [ ];
 
@@ -131,14 +131,12 @@ let
     name: server: server.type == "remote" || (resolveCommand name server) != [ ]
   ) config.mcpServers;
 
-  renderLocalMcp =
-    command:
-    {
-      type = "stdio";
-      command = builtins.head command;
-      args = lib.tail command;
-      env = { };
-    };
+  renderLocalMcp = command: {
+    type = "stdio";
+    command = builtins.head command;
+    args = lib.tail command;
+    env = { };
+  };
 
   mcpEntries = lib.mapAttrs (
     name: server:

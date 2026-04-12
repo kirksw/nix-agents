@@ -84,6 +84,22 @@ let
     else
       true;
 
+  checkManagedSubset =
+    let
+      bad = lib.concatMap (
+        name:
+        let
+          agent = config.agents.${name};
+          notInDelegates = lib.filter (m: !builtins.elem m agent.delegatesTo) agent.managedAgents;
+        in
+        map (m: "${name}.managedAgents: ${m} not in delegatesTo") notInDelegates
+      ) agentNames;
+    in
+    if bad != [ ] then
+      throw "managedAgents must be a subset of delegatesTo: ${lib.concatStringsSep ", " bad}"
+    else
+      true;
+
   checkProfileRefs =
     let
       profileNames = builtins.attrNames config.profiles;
@@ -127,16 +143,98 @@ let
     else
       true;
 
+  # ADR-0001: Every profile that declares a base must reference an existing base.
+  checkBaseExistence =
+    let
+      baseNames = builtins.attrNames config.bases;
+      profileNames = builtins.attrNames config.profiles;
+      # Only check profiles that explicitly set a base field
+      explicitProfiles = lib.filter (p: config.profiles.${p}.base != null) profileNames;
+      bad = lib.filter (p: !builtins.elem config.profiles.${p}.base baseNames) explicitProfiles;
+    in
+    if bad != [ ] then
+      throw "Profiles reference nonexistent bases: ${
+        lib.concatStringsSep ", " (map (p: "${p} -> ${config.profiles.${p}.base}") bad)
+      }"
+    else
+      true;
+
+  # ADR-0001: No two bases may share the same stateDir override.
+  checkBaseStateDirUniqueness =
+    let
+      baseEntries = lib.filterAttrs (_: b: b.stateDir != null) config.bases;
+      # Group bases by their stateDir
+      byDir = lib.foldAttrs (name: _: [ name ]) [ ] (
+        lib.mapAttrsToList (name: b: {
+          name = b.stateDir;
+          value = name;
+        }) baseEntries
+      );
+      duplicates = lib.filterAttrs (_: names: builtins.length names > 1) byDir;
+    in
+    if duplicates != { } then
+      throw "Bases share stateDir: ${
+        lib.concatStringsSep ", " (
+          lib.mapAttrsToList (dir: names: "${lib.concatStringsSep ", " names} -> ${dir}") duplicates
+        )
+      }"
+    else
+      true;
+
+  # ADR-0001: Profile providers must be a subset of their base's providers
+  # (when the profile declares a base and the base declares providers).
+  # If a base has providers, profiles in that base must not reference providers
+  # outside the base's set.
+  checkCrossBaseProviders =
+    let
+      profileNames = builtins.attrNames config.profiles;
+      allProviders = builtins.attrNames config.providers;
+      checkProfile =
+        p:
+        let
+          profile = config.profiles.${p};
+          baseName = profile.base;
+        in
+        if baseName == null then
+          [ ]
+        else
+          let
+            baseCfg = config.bases.${baseName} or null;
+          in
+          if baseCfg == null || baseCfg.providers == [ ] then
+            [ ]
+          else
+            let
+              outsideBase = lib.filter (pr: !builtins.elem pr baseCfg.providers) profile.providers;
+            in
+            map (pr: "${p}.providers: ${pr} not in base ${baseName}") outsideBase;
+      bad = lib.concatMap checkProfile profileNames;
+    in
+    if bad != [ ] then
+      throw "Profile providers leak across base boundary: ${lib.concatStringsSep ", " bad}"
+    else
+      true;
+
   allValid =
     checkDelegatesExist
     && checkNoSelfDelegation
     && checkTaskPerms
     && checkSkillRefs
     && checkMcpRefs
-    && checkProfileRefs;
+    && checkProfileRefs
+    && checkManagedSubset
+    && checkBaseExistence
+    && checkBaseStateDirUniqueness
+    && checkCrossBaseProviders;
 in
 {
   options = {
+    maxDelegationDepth = lib.mkOption {
+      type = lib.types.int;
+      default = 5;
+      description = "System-wide max delegation depth. Individual agents can override.";
+    };
+
     tierMapping = lib.mkOption {
       type = lib.types.attrsOf lib.types.str;
       default = { };

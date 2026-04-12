@@ -4,12 +4,16 @@
 
 nix-agents defines LLM agent teams once in Nix and generates tool-specific configs for OpenCode, Claude Code, Codex, Cursor, Amp, and Pi from a single source of truth.
 
+The system uses a **base/profile hierarchy** (ADR-0001) for runtime state isolation:
+- **Base** = security/account/environment boundary (owns credentials, auth, sessions)
+- **Profile** = configuration overlay within a base (agents, skills, tier mappings, permissions)
+
 ```mermaid
 graph TD
     A[defs/agents/] --> E[lib/core/eval.nix]
     S[defs/skills/] --> E
     M[defs/mcps/] --> E
-    H[human / profiles / providers] --> E
+    H[human / bases / profiles / providers] --> E
     E --> |evalModules| C[Evaluated Config]
     C --> G1[generators/opencode.nix]
     C --> G2[generators/claude-code.nix]
@@ -34,11 +38,12 @@ graph TD
 nix-agents/
 ├── flake.nix                  # Entry point: lib, packages, devShells, templates, checks
 ├── lib/
-│   ├── default.nix            # Public API: types, evalModules, mkAgentSystem, mkWrappedTool
+│   ├── default.nix            # Public API: types, evalModules, mkAgentSystem, mkWrappedTool, resolveBaseProfile
 │   └── core/
-│       ├── types.nix          # Option types: agent, skill, mcp-server, human, provider, profile, hook
+│       ├── types.nix          # Option types: agent, skill, mcp-server, human, provider, base, profile, hook
 │       ├── eval.nix           # lib.evalModules wrapper (wires all modules + specialArgs)
 │       ├── builders.nix       # mkAgentSystem (evaluate + generate + build store path)
+│       │                      # resolveBaseProfile (normalize profile IDs to { base, profile })
 │       │                      # mkWrappedTool (shell wrapper with credential resolution)
 │       └── generators/
 │           ├── shared.nix     # mkHumanPreamble (cognitive-style expansion)
@@ -53,13 +58,14 @@ nix-agents/
 ├── lib/
 │   └── schemas/               # JSON schemas for generated config validation
 ├── modules/
-│   ├── system.nix             # tierMapping, defaultPermissions, graph validation
+│   ├── system.nix             # tierMapping, defaultPermissions, graph + base/profile validation
 │   ├── agent.nix              # Declares `agents` option
 │   ├── skill.nix              # Declares `skills` option
 │   ├── mcp-server.nix         # Declares `mcpServers` option
 │   ├── human.nix              # Declares `human` option (operator context)
 │   ├── provider.nix           # Declares `providers` option (credential sources)
-│   ├── profile.nix            # Declares `profiles` option (path-based config switching)
+│   ├── base.nix               # Declares `bases` option (ADR-0001 environment boundaries)
+│   ├── profile.nix            # Declares `profiles` option (configuration overlays within bases)
 │   └── hook.nix               # Declares `hooks` option (event-triggered shell scripts)
 ├── defs/
 │   ├── agents/                # Agent definitions (8 files: code-monkey, the-architect, …)
@@ -71,6 +77,7 @@ nix-agents/
 │   └── agent-observe/         # Observability service: HTTP + SQLite + MCP server
 ├── presets/
 │   ├── default.nix            # 8-agent team + 7 skills + swe-pruner MCP
+│   ├── profiles.nix           # Base/profile hierarchy (ADR-0001)
 │   ├── minimal.nix            # Minimal 2-agent team
 │   └── security.nix           # Security-focused preset
 └── templates/
@@ -79,14 +86,64 @@ nix-agents/
 
 ## Data Flow
 
-1. **Definition** — Agents, skills, MCP servers, human context, providers, and profiles are plain Nix attrsets in `defs/`.
+1. **Definition** — Agents, skills, MCP servers, human context, providers, bases, and profiles are plain Nix attrsets in `defs/`.
 2. **Composition** — `presets/default.nix` imports all built-in definitions. Downstream users can import a preset and overlay their own.
-3. **Evaluation** — `lib/core/eval.nix` calls `lib.evalModules` with all 8 module declarations. `modules/system.nix` validates the agent graph and profile references at eval time.
-4. **Profile resolution** — `lib/core/builders.nix` `resolveProfile` filters agents/skills/MCP servers and merges human context, tier mappings, and permission overrides from the named profile.
-5. **Generation** — Each generator transforms the evaluated (and optionally profile-filtered) config into tool-specific output files.
-6. **Building** — `mkAgentSystem` writes the generated output to a Nix store path. `mkWrappedTool` creates a shell wrapper that resolves credentials, selects the active profile by `$PWD`, and execs the real tool binary.
+3. **Evaluation** — `lib/core/eval.nix` calls `lib.evalModules` with all 9 module declarations. `modules/system.nix` validates the agent graph, profile references, and base invariants at eval time.
+4. **Base resolution** — `lib/core/builders.nix` `resolveBaseProfile` normalizes profile identifiers into `{ base, profile }`. Every profile must declare a `base` field.
+5. **Profile resolution** — `resolveProfile` filters agents/skills/MCP servers and merges base-scoped providers, human context, tier mappings, and permission overrides.
+6. **Generation** — Each generator transforms the evaluated (and optionally profile-filtered) config into tool-specific output files.
+7. **Building** — `mkAgentSystem` writes the generated output to a Nix store path. `mkWrappedTool` creates a shell wrapper that resolves credentials, selects the active profile by `$PWD`, and execs the real tool binary.
+
+## Base/Profile Model (ADR-0001)
+
+The system uses a two-level namespace for runtime configuration:
+
+- **Base** = runtime-state boundary (security/account/environment). Owns shared credentials, auth, sessions.
+- **Profile** = configuration overlay within a base. Owns agent selection, tier mappings, permissions.
+
+Canonical naming: `<base>/<profile>` (e.g., `work/stable`, `personal/extreme`).
+
+### Base Isolation
+
+- No runtime credential/auth sharing across bases
+- `work/*` and `personal/*` are hard-isolated by directory and wrapper resolution
+- Profiles within the same base share auth (no re-login required when switching)
+
+### Directory Layout
+
+Config root: `~/.config/nix-agents/<target>/bases/<base>/profiles/<profile>/`
+
+For Pi, shared state is co-located under `~/.config/nix-agents/pi/bases/<base>/state/` (auth.json, models.json, settings.json, sessions/)
+
+### Migration
+
+Every profile must declare a `base` field referencing an existing entry in `config.bases`.
 
 ## Type System
+
+### Base
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `stateDir` | `nullOr str` | Override for base runtime state directory |
+| `providers` | `listOf str` | Provider names scoped to this base |
+| `human` | `nullOr humanType` | Base-scoped operator context |
+| `defaultProfile` | `str` | Name of the default profile within this base (default: `"default"`) |
+| `pathPrefixes` | `listOf str` | Filesystem path prefixes that activate profiles in this base |
+
+### Profile
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `base` | `str` | Base this profile belongs to (required, must reference an existing entry in `config.bases`) |
+| `pathPrefixes` | `listOf str` | Filesystem path prefixes that auto-select this profile |
+| `providers` | `listOf str` | Provider names active in this profile (merged with base providers) |
+| `agents` | `listOf str` | Agent names included (empty = all) |
+| `skills` | `listOf str` | Skill names included (empty = all) |
+| `mcpServers` | `listOf str` | MCP server names included (empty = all) |
+| `human` | `nullOr humanType` | Human context override for this profile |
+| `tierMapping` | `attrsOf str` | Profile-local tier overrides merged over system tierMapping |
+| `permissions` | `nullOr permissionsType` | Profile-local permission defaults |
 
 ### Agent
 
@@ -143,19 +200,6 @@ nix-agents/
 | `credentialRef` | `str` | Key name, env var name, or sops path |
 | `envVar` | `str` | Env var the tool expects at runtime (e.g. `ANTHROPIC_API_KEY`) |
 
-### Profile
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `pathPrefixes` | `listOf str` | Filesystem path prefixes that auto-select this profile |
-| `providers` | `listOf str` | Provider names active in this profile |
-| `agents` | `listOf str` | Agent names included (empty = all) |
-| `skills` | `listOf str` | Skill names included (empty = all) |
-| `mcpServers` | `listOf str` | MCP server names included (empty = all) |
-| `human` | `nullOr humanType` | Human context override for this profile |
-| `tierMapping` | `attrsOf str` | Profile-local tier overrides merged over system tierMapping |
-| `permissions` | `nullOr permissionsType` | Profile-local permission defaults |
-
 ### Permission
 
 ```
@@ -173,6 +217,9 @@ permissionSet = { default : permission; rules : attrsOf permission; }
 4. Every skill reference resolves to a defined skill
 5. Every MCP server reference resolves to a defined server
 6. Every profile's `agents`, `skills`, `mcpServers`, and `providers` lists must reference existing definitions
+7. Profiles with an explicit `base` field must reference an existing base (ADR-0001)
+8. No two bases may share the same `stateDir` override (ADR-0001)
+9. Profile providers must be a subset of their declared base's providers (ADR-0001)
 
 Invalid graphs produce clear `throw` messages during `nix build` or `nix flake check`.
 

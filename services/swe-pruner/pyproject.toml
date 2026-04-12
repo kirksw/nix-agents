@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "swe-pruner-mcp"
+version = "0.1.0"
+description = "MCP server for SWE-Pruner context-aware code pruning"
+requires-python = ">=3.12"
+authors = [
+  { name = "kirksw" }
+]
+license = { text = "MIT" }
+
+dependencies = [
+  "mcp>=0.1.0",
+  "transformers>=4.57.0",
+  "torch>=2.0.0",
+  "huggingface-hub>=0.35.0",
+  "pydantic>=2.0.0",
+]
+
+[project.scripts]
+swe-pruner-mcp = "swe_pruner_mcp.server:main"
+
+[tool.hatchling.build.targets.wheel]
+packages = ["src/swe_pruner_mcp"]
+
+[tool.hatchling.build]
+include = [
+  "src/swe_pruner_mcp/**/*.py",
+]

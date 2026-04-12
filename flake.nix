@@ -26,6 +26,11 @@
           ./presets/profiles.nix
         ];
 
+        tieredModules = [
+          ./presets/tiered.nix
+          ./presets/profiles.nix
+        ];
+
         mkConfig =
           target:
           library.mkAgentSystem {
@@ -45,6 +50,16 @@
         claudeConfig = mkConfig "claude";
         codexConfig = mkConfig "codex";
         piConfig = mkConfigWithSrc "pi";
+
+        mkTieredConfigWithSrc =
+          target:
+          library.mkAgentSystem {
+            inherit pkgs target;
+            modules = tieredModules;
+            src = ./.;
+          };
+
+        tieredPiConfig = mkTieredConfigWithSrc "pi";
         cursorConfig = mkConfig "cursor";
         ampConfig = mkConfig "amp";
         opencodeProfileMeta = library.mkProfileMeta {
@@ -65,7 +80,7 @@
         };
         piProfileMeta = library.mkProfileMeta {
           inherit pkgs;
-          modules = defaultModules;
+          modules = tieredModules;
           target = "pi";
           src = ./.;
         };
@@ -105,6 +120,7 @@
             claudeConfig
             codexConfig
             ampConfig
+            tieredPiConfig
             ;
         };
 
@@ -127,28 +143,27 @@
             optionalTrees ? [ ],
           }:
           let
-            renderOne =
-              profileName: storePath:
-              ''
-                if [ -d "${storePath}" ]; then
-                  echo "Syncing ${label} to $NIX_AGENTS_DIR/${targetName}/profiles/${profileName}..."
-                  sync_tree "${storePath}/agents" "$NIX_AGENTS_DIR/${targetName}/profiles/${profileName}/agents"
-                  sync_tree "${storePath}/skills" "$NIX_AGENTS_DIR/${targetName}/profiles/${profileName}/skills"
-                  ${pkgs.lib.concatMapStringsSep "\n" (
-                    file:
-                    ''sync_file "${storePath}/${file.source}" "$NIX_AGENTS_DIR/${targetName}/profiles/${profileName}/${file.target}"''
-                  ) files}
-                  ${pkgs.lib.concatMapStringsSep "\n" (
-                    tree:
-                    ''sync_optional_tree "${storePath}/${tree.source}" "$NIX_AGENTS_DIR/${targetName}/profiles/${profileName}/${tree.target}"''
-                  ) optionalTrees}
-                fi
-              '';
+            # Sync one profile's store path to the base/profile directory layout.
+            renderOne = base: profileName: storePath: ''
+              if [ -d "${storePath}" ]; then
+                echo "Syncing ${label} to $NIX_AGENTS_DIR/${targetName}/bases/${base}/profiles/${profileName}..."
+                sync_tree "${storePath}/agents" "$NIX_AGENTS_DIR/${targetName}/bases/${base}/profiles/${profileName}/agents"
+                sync_tree "${storePath}/skills" "$NIX_AGENTS_DIR/${targetName}/bases/${base}/profiles/${profileName}/skills"
+                ${pkgs.lib.concatMapStringsSep "\n" (
+                  file:
+                  ''sync_file "${storePath}/${file.source}" "$NIX_AGENTS_DIR/${targetName}/bases/${base}/profiles/${profileName}/${file.target}"''
+                ) files}
+                ${pkgs.lib.concatMapStringsSep "\n" (
+                  tree:
+                  ''sync_optional_tree "${storePath}/${tree.source}" "$NIX_AGENTS_DIR/${targetName}/bases/${base}/profiles/${profileName}/${tree.target}"''
+                ) optionalTrees}
+              fi
+            '';
           in
-          renderOne "default" defaultConfig
-          + "\n"
-          + pkgs.lib.concatStringsSep "\n" (
-            pkgs.lib.mapAttrsToList (profileName: meta: renderOne profileName meta.storePath) profileMeta
+          pkgs.lib.concatStringsSep "\n" (
+            pkgs.lib.mapAttrsToList (
+              profileName: meta: renderOne meta.base profileName meta.storePath
+            ) profileMeta
           );
 
         syncAgents = pkgs.writeShellScriptBin "sync-agents" ''
@@ -257,11 +272,11 @@
             ];
           }}
 
-          # Pi
+          # Pi (tiered config — includes all flat agents + orchestrator/managers)
           ${mkProfileSyncBlock {
             label = "Pi";
             targetName = "pi";
-            defaultConfig = piConfig;
+            defaultConfig = tieredPiConfig;
             profileMeta = piProfileMeta;
             files = [
               {
@@ -304,7 +319,12 @@
       {
         lib = {
           inherit (library) evalModules types;
-          inherit (library) mkAgentSystem mkProfileMeta mkWrappedTool;
+          inherit (library)
+            mkAgentSystem
+            mkProfileMeta
+            mkWrappedTool
+            resolveBaseProfile
+            ;
         };
 
         packages = {
@@ -337,14 +357,16 @@
             inherit pkgs;
             target = "pi";
             tool = piCodingAgent;
-            agentSystem = piConfig;
+            agentSystem = tieredPiConfig;
             profileMeta = piProfileMeta;
           };
           cursor-config = cursorConfig;
           amp-config = ampConfig;
+          tiered-pi-config = tieredPiConfig;
           pi-coding-agent = piCodingAgent;
           update-script = updateScript;
           observe-service = pkgs.callPackage ./services/agent-observe { };
+          swe-pruner = pkgs.callPackage ./services/swe-pruner { };
           default = opencodeConfig;
         };
 
@@ -539,7 +561,7 @@
                 target = "opencode";
                 tool = agentPkgs.opencode;
                 agentSystem = opencodeConfig;
-                profile = "work";
+                profileMeta = opencodeProfileMeta;
               }
             }/bin/opencode
             claude_wrapper=${
@@ -548,7 +570,7 @@
                 target = "claude";
                 tool = agentPkgs.claude-code;
                 agentSystem = claudeConfig;
-                profile = "work";
+                profileMeta = claudeProfileMeta;
               }
             }/bin/claude
             codex_wrapper=${
@@ -557,7 +579,7 @@
                 target = "codex";
                 tool = agentPkgs.codex;
                 agentSystem = codexConfig;
-                profile = "work";
+                profileMeta = codexProfileMeta;
               }
             }/bin/codex
             pi_wrapper=${
@@ -565,16 +587,29 @@
                 inherit pkgs;
                 target = "pi";
                 tool = piCodingAgent;
-                agentSystem = piConfig;
-                profile = "work";
+                agentSystem = tieredPiConfig;
+                profileMeta = piProfileMeta;
               }
             }/bin/pi
 
-            grep -q 'opencode/profiles/\$_NAX_PROFILE' "$opencode_wrapper"
-            grep -q 'nix-agents/claude\$_NAX_PROFILE_SUFFIX' "$claude_wrapper"
-            grep -q 'nix-agents/codex\$_NAX_PROFILE_SUFFIX' "$codex_wrapper"
-            grep -q 'nix-agents/pi\$_NAX_PROFILE_SUFFIX' "$pi_wrapper"
-            grep -q '\$HOME/.pi/agent' "$pi_wrapper"
+            # All wrappers must use the base/profile directory layout
+            grep -q 'bases/\$NAX_BASE/profiles/\$NAX_PROFILE' "$opencode_wrapper"
+            grep -q 'bases/\$NAX_BASE/profiles/\$NAX_PROFILE' "$claude_wrapper"
+            grep -q 'bases/\$NAX_BASE/profiles/\$NAX_PROFILE' "$codex_wrapper"
+            grep -q 'bases/\$NAX_BASE/profiles/\$NAX_PROFILE' "$pi_wrapper"
+
+            # Pi must use co-located base-scoped state
+            grep -q 'nix-agents/pi/bases/\$NAX_BASE/state' "$pi_wrapper"
+
+            # All wrappers must export NAX_BASE
+            grep -q 'export NAX_BASE=' "$opencode_wrapper"
+            grep -q 'export NAX_BASE=' "$claude_wrapper"
+            grep -q 'export NAX_BASE=' "$codex_wrapper"
+            grep -q 'export NAX_BASE=' "$pi_wrapper"
+
+            # Profile meta must contain actual profile names
+            grep -q 'work-stable' "$opencode_wrapper"
+            grep -q 'personal-stable' "$pi_wrapper"
             touch $out
           '';
 

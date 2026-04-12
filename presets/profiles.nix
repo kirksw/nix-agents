@@ -1,23 +1,61 @@
+# ADR-0001 base/profile preset.
+# Each base represents an environment boundary (work/personal) that owns
+# shared runtime state (credentials, auth, sessions). Profiles are
+# configuration overlays within a base.
+
 _: {
-  profiles = {
-    # personal — activated for ~/src/ and ~/projects/ paths.
-    # All agents and skills available; use reasoning model for architecture tasks.
+  bases = {
+    # personal — personal projects, full agent access, own credentials
     personal = {
       pathPrefixes = [
         "~/src/"
         "~/projects/"
       ];
+      providers = [ ];
+      defaultProfile = "stable";
+      git = {
+        userName = "Kirk Sweeney";
+        userEmail = "kirk@cntd.io";
+        signingKey = "/Users/kisw/.config/sops-nix/secrets/ssh/kirksw/private";
+        gpgFormat = "ssh";
+      };
+    };
+
+    # work — work projects, restricted agent set, shared work credentials
+    work = {
+      pathPrefixes = [
+        "~/git/github.com/lunarway/"
+        "~/projects/lunar/"
+      ];
+      providers = [ ];
+      defaultProfile = "stable";
+      git = {
+        userName = "Kirk Sweeney";
+        userEmail = "kisw@lunar.app";
+        signingKey = "/Users/kisw/.config/sops-nix/secrets/ssh/lunarway/private";
+        gpgFormat = "ssh";
+      };
+    };
+  };
+
+  profiles = {
+    # --- personal profiles ---
+
+    personal-stable = {
+      base = "personal";
+      pathPrefixes = [ ];
       agents = [ ]; # empty = all
       skills = [ ]; # empty = all
       mcpServers = [ ]; # empty = all
       tierMapping = { };
     };
 
-    # work — activated for ~/work/ paths.
-    # Restricted agent set and no external web fetching.
-    # Downgrades expensive models to sonnet to control costs.
-    work = {
-      pathPrefixes = [ "~/work/" ];
+    # --- work profiles ---
+
+    # work/stable: conservative model tiers, stricter permissions
+    work-stable = {
+      base = "work";
+      pathPrefixes = [ ];
       agents = [
         "10xBEAST"
         "the-architect"
@@ -32,7 +70,7 @@ _: {
       mcpServers = [ ];
       tierMapping = {
         powerful = "anthropic/claude-sonnet-4-6";
-        reasoning = "anthropic/claude-sonnet-4-6";
+        reasoning = "anthropic/claude-opus-4-6";
       };
       permissions = {
         edit = null;
@@ -42,25 +80,7 @@ _: {
       };
     };
 
-    # nix-ops — activated for ~/src/nixfiles/ and ~/.config/ paths.
-    # Full agent set with Nix-specific skill whitelist.
-    # Uses opus for reasoning tasks (heavy architecture work).
-    nix-ops = {
-      pathPrefixes = [
-        "~/src/nixfiles/"
-        "~/.config/"
-      ];
-      agents = [ ]; # all agents
-      skills = [
-        "nix-coding-style"
-        "nix-flake-ops"
-        "nix-module-workflow"
-        "secrets-management"
-      ];
-      mcpServers = [ ];
-      tierMapping = {
-        reasoning = "anthropic/claude-opus-4-6";
-      };
-    };
+    # work/team: same work auth, team-optimized delegation
+    # (future: add team-specific agents/skills here)
   };
 }

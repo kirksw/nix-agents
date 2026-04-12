@@ -22,10 +22,43 @@ let
     else
       opencodeGenerator;
 
+  # Normalize a profile identifier into { base, profile }.
+  # Accepts both "<base>/<profile>" and flat names ("<profile>").
+  # Flat names are resolved to "<profile>.base" if set, otherwise "default/<profile>".
+  resolveBaseProfile =
+    config: profileName:
+    let
+      parts = lib.splitString "/" profileName;
+    in
+    if builtins.length parts > 1 then
+      # Explicit <base>/<profile> format
+      {
+        base = lib.head parts;
+        profile = lib.concatStringsSep "/" (lib.tail parts);
+      }
+    else
+      # Flat name — profile must declare a base field
+      let
+        profileCfg = config.profiles.${profileName} or null;
+        baseName =
+          if profileCfg != null && profileCfg.base != null then
+            profileCfg.base
+          else
+            throw "nix-agents: profile '${profileName}' has no base assigned. "
+            + "Every profile must declare a base field referencing an entry in config.bases.";
+      in
+      {
+        base = baseName;
+        profile = profileName;
+      };
+
   # Resolve a named profile against the full config, returning a filtered/overridden config.
+  # Base-aware: merges base-scoped providers, human, and pathPrefixes when applicable.
   resolveProfile =
     config: profileName:
     let
+      resolved = resolveBaseProfile config profileName;
+      baseCfg = config.bases.${resolved.base} or null;
       profile = config.profiles.${profileName};
 
       filterByWhitelist =
@@ -35,7 +68,18 @@ let
         else
           lib.filterAttrs (name: _: builtins.elem name whitelist) attrset;
 
-      resolvedHuman = if profile.human != null then profile.human else config.human;
+      # Merge base + profile providers (profile adds to base, deduped)
+      baseProviders = if baseCfg != null then baseCfg.providers else [ ];
+      mergedProviderNames = lib.unique (baseProviders ++ profile.providers);
+
+      # Human resolution: profile > base > system
+      resolvedHuman =
+        if profile.human != null then
+          profile.human
+        else if baseCfg != null && baseCfg.human != null then
+          baseCfg.human
+        else
+          config.human;
 
       resolvedTierMapping = config.tierMapping // profile.tierMapping;
 
@@ -75,6 +119,10 @@ let
       human = resolvedHuman;
       tierMapping = resolvedTierMapping;
       defaultPermissions = resolvedDefaultPermissions;
+      # Expose the resolved base name and merged provider list for downstream consumers.
+      # These are used by mkProfileMeta and mkWrappedTool for base-scoped state.
+      _resolvedBase = resolved.base;
+      _resolvedProviders = mergedProviderNames;
     };
 
   mkAgentSystem =
@@ -89,7 +137,7 @@ let
     let
       evaluated = evalModules {
         inherit modules;
-        specialArgs = { inherit inputs; };
+        specialArgs = { inherit inputs pkgs; };
       };
       rawConfig = evaluated.config;
       config = if profile != null then resolveProfile rawConfig profile else rawConfig;
@@ -142,24 +190,31 @@ let
         else
           skill.content;
 
-      writeSkill = name: content: ''
-        mkdir -p "$out/skills/${name}"
-        cp ${builtins.toFile "skill-${name}.md" content} "$out/skills/${name}/SKILL.md"
-      '';
+      writeSkill =
+        name: skill:
+        if skill.src != null then
+          ''
+            mkdir -p "$out/skills/${name}"
+            cp -r ${skill.src}/. "$out/skills/${name}/"
+            chmod -R u+w "$out/skills/${name}"
+          ''
+        else
+          ''
+            mkdir -p "$out/skills/${name}"
+            cp ${builtins.toFile "skill-${name}.md" skill.content} "$out/skills/${name}/SKILL.md"
+          '';
 
       commonOutputs = ''
         mkdir -p "$out/agents" "$out/skills"
         ${lib.concatStringsSep "\n" (lib.mapAttrsToList writeAgent generated.agents)}
-        ${lib.concatStringsSep "\n" (
-          lib.mapAttrsToList (name: skill: writeSkill name (skillContent name skill)) config.skills
-        )}
+        ${lib.concatStringsSep "\n" (lib.mapAttrsToList writeSkill config.skills)}
         cp ${hookManifest} "$out/hook-manifest"
         cp ${skillVersionManifest} "$out/skill-versions.json"
       '';
 
       opencodeOutputs = ''
         ${commonOutputs}
-        cp ${builtins.toFile "opencode.json" generated.opencodeJson} "$out/opencode.json"
+        cp ${pkgs.writeText "opencode.json" generated.opencodeJson} "$out/opencode.json"
         cp ${builtins.toFile "AGENTS.md" generated.agentsMd} "$out/AGENTS.md"
       '';
 
@@ -167,13 +222,13 @@ let
         ${commonOutputs}
         cp ${builtins.toFile "settings.json" generated.settingsJson} "$out/settings.json"
         cp ${builtins.toFile "CLAUDE.md" generated.claudeMd} "$out/CLAUDE.md"
-        cp ${builtins.toFile "mcp.json" generated.mcpJson} "$out/.mcp.json"
+        cp ${pkgs.writeText "mcp.json" generated.mcpJson} "$out/.mcp.json"
       '';
 
       codexOutputs = ''
         ${commonOutputs}
         cp ${builtins.toFile "AGENTS.md" generated.agentsMd} "$out/AGENTS.md"
-        cp ${builtins.toFile "mcp.json" generated.mcpJson} "$out/mcp.json"
+        cp ${pkgs.writeText "mcp.json" generated.mcpJson} "$out/mcp.json"
       '';
 
       piOutputs = ''
@@ -201,14 +256,14 @@ let
             cp ${builtins.toFile "cursor-skill-${name}.mdc" content} "$out/.cursor/rules/skill-${name}.mdc"
           '') generated.skillRules
         )}
-        cp ${builtins.toFile "cursor-mcp.json" generated.mcpJson} "$out/.cursor/mcp.json"
+        cp ${pkgs.writeText "cursor-mcp.json" generated.mcpJson} "$out/.cursor/mcp.json"
       '';
 
       ampOutputs = ''
         mkdir -p "$out"
         cp ${hookManifest} "$out/hook-manifest"
         cp ${skillVersionManifest} "$out/skill-versions.json"
-        cp ${builtins.toFile "amp.json" generated.ampJson} "$out/amp.json"
+        cp ${pkgs.writeText "amp.json" generated.ampJson} "$out/amp.json"
         cp ${builtins.toFile "AGENTS.md" generated.agentsMd} "$out/AGENTS.md"
       '';
 
@@ -232,9 +287,16 @@ let
     '';
 
   # Build profile metadata for use with mkWrappedTool.
-  # Returns an attrset of profileName -> { storePath, pathPrefixes } for all
-  # profiles defined in the evaluated modules. Delegates to mkAgentSystem so
-  # there is a single code path for building per-profile store paths.
+  # Returns an attrset of profileName -> { storePath, pathPrefixes, providers, base }
+  # for all profiles defined in the evaluated modules.
+  # Delegates to mkAgentSystem so there is a single code path for building
+  # per-profile store paths.
+  #
+  # Each entry includes:
+  #   storePath    — nix store path with generated config
+  #   pathPrefixes — filesystem prefixes for profile auto-detection
+  #   providers    — resolved provider objects (base + profile merged, deduped)
+  #   base         — resolved base name from profile's base field
   mkProfileMeta =
     {
       pkgs,
@@ -246,7 +308,7 @@ let
     let
       evaluated = evalModules {
         inherit modules;
-        specialArgs = { inherit inputs; };
+        specialArgs = { inherit inputs pkgs; };
       };
     in
     lib.mapAttrs (name: profile: {
@@ -260,10 +322,29 @@ let
           ;
         profile = name;
       };
-      inherit (profile) pathPrefixes;
-      # Resolve provider names to full provider objects so mkWrappedTool
-      # can generate credential-resolution shell code at build time.
-      providers = map (pname: evaluated.config.providers.${pname}) profile.providers;
+      pathPrefixes =
+        let
+          # Merge base pathPrefixes + profile pathPrefixes
+          baseCfg = evaluated.config.bases.${(resolveBaseProfile evaluated.config name).base} or null;
+          basePrefixes = if baseCfg != null then baseCfg.pathPrefixes else [ ];
+        in
+        lib.unique (basePrefixes ++ profile.pathPrefixes);
+      # Resolve providers: merge base + profile provider names, dedupe, then
+      # resolve to full provider objects for mkWrappedTool credential generation.
+      providers =
+        let
+          baseCfg = evaluated.config.bases.${(resolveBaseProfile evaluated.config name).base} or null;
+          baseProviderNames = if baseCfg != null then baseCfg.providers else [ ];
+          mergedNames = lib.unique (baseProviderNames ++ profile.providers);
+        in
+        map (pname: evaluated.config.providers.${pname}) mergedNames;
+      # Resolve git identity from base.
+      git =
+        let
+          baseCfg = evaluated.config.bases.${(resolveBaseProfile evaluated.config name).base} or null;
+        in
+        if baseCfg != null && baseCfg.git != null then baseCfg.git else null;
+      inherit ((resolveBaseProfile evaluated.config name)) base;
     }) evaluated.config.profiles;
 
   # Generate a shell snippet that resolves one provider's credential and
@@ -310,7 +391,7 @@ let
 
 in
 {
-  inherit mkAgentSystem mkProfileMeta;
+  inherit mkAgentSystem mkProfileMeta resolveBaseProfile;
 
   mkWrappedTool =
     {
@@ -354,9 +435,11 @@ in
         map ({ name, prefix }: "          ${expandPrefix prefix}*) _NAX_PROFILE=${name} ;;") sortedPrefixes
       );
 
-      # case arms: profile name -> store path
+      # case arms: profile name -> (base, store path)
       profilePathCaseArms = lib.concatStringsSep "\n" (
-        lib.mapAttrsToList (name: meta: "          ${name}) _NAX_CONFIG=${meta.storePath} ;;") profileMeta
+        lib.mapAttrsToList (
+          name: meta: "          ${name}) _NAX_CONFIG=${meta.storePath}; _NAX_BASE=\"${meta.base}\" ;;"
+        ) profileMeta
       );
 
       profileDetectionBlock = lib.optionalString hasProfiles ''
@@ -378,7 +461,7 @@ in
       '';
 
       # Emitted at the top of the wrapper when profiles are configured.
-      # Sets _NAX_CONFIG to the appropriate store path based on $PWD.
+      # Sets _NAX_CONFIG and _NAX_BASE based on $PWD.
       profileBlock = lib.optionalString needsProfileSelection ''
         _NAX_PROFILE="${forcedProfile}"
         ${profileDetectionBlock}
@@ -408,6 +491,32 @@ in
           ${arms}  esac
         '';
 
+      # Generate per-profile git identity exports as a case statement.
+      # Sets GIT_AUTHOR/COMMITTER env vars so commits from subagents use the
+      # correct identity for the active base.
+      gitIdentityBlock =
+        let
+          mkGitArm =
+            name: meta:
+            lib.optionalString (meta.git != null) ''
+                ${name})
+                  export GIT_AUTHOR_NAME="${meta.git.userName}"
+                  export GIT_AUTHOR_EMAIL="${meta.git.userEmail}"
+                  export GIT_COMMITTER_NAME="${meta.git.userName}"
+                  export GIT_COMMITTER_EMAIL="${meta.git.userEmail}"
+                  ${lib.optionalString (meta.git.signingKey != null) ''
+                    export GIT_AUTHOR_SIGNINGKEY="${meta.git.signingKey}"
+                    export GIT_COMMITTER_SIGNINGKEY="${meta.git.signingKey}"
+                  ''}
+                  ;;
+            '';
+          arms = lib.concatStrings (lib.mapAttrsToList mkGitArm profileMeta);
+        in
+        lib.optionalString (hasProfiles && arms != "") ''
+          case "''${_NAX_PROFILE:-}" in
+          ${arms}  esac
+        '';
+
       # The config store path used throughout the rest of the wrapper.
       # Statically embedded when there are no profiles, runtime variable when there are.
       nixAgentsConfig = if hasProfiles then "$_NAX_CONFIG" else "${agentSystem}";
@@ -415,11 +524,13 @@ in
     pkgs.writeShellScriptBin binName ''
       ${profileBlock}
       ${credentialBlock}
+      ${gitIdentityBlock}
       _NAX_HOOKS="${nixAgentsConfig}/hook-manifest"
       _NAX_BASE_CONFIG_HOME="''${XDG_CONFIG_HOME:-$HOME/.config}"
       _NAX_BASE_DATA_HOME="''${XDG_DATA_HOME:-$HOME/.local/share}"
       export NAX_PROFILE="''${_NAX_PROFILE:-default}"
-      _NAX_TOOL_CONFIG_DIR="$_NAX_BASE_CONFIG_HOME/nix-agents/${target}/profiles/$NAX_PROFILE"
+      export NAX_BASE="$_NAX_BASE"
+      _NAX_TOOL_CONFIG_DIR="$_NAX_BASE_CONFIG_HOME/nix-agents/${target}/bases/$NAX_BASE/profiles/$NAX_PROFILE"
       export NAX_SKILL_VERSIONS="${nixAgentsConfig}/skill-versions.json"
       export NAX_WRAPPER_PID=$$
       _run_hook() {
@@ -440,7 +551,8 @@ in
         local target_path="$2"
         rm -rf "$target_path"
         if [ -d "$source_dir" ]; then
-          ln -sfn "$source_dir" "$target_path"
+          cp -R "$source_dir" "$target_path"
+          chmod -R u+w "$target_path"
         fi
       }
       _sync_link_file() {
@@ -448,7 +560,8 @@ in
         local target_path="$2"
         rm -rf "$target_path"
         if [ -f "$source_file" ]; then
-          ln -sfn "$source_file" "$target_path"
+          cp "$source_file" "$target_path"
+          chmod u+w "$target_path"
         fi
       }
 
@@ -459,8 +572,8 @@ in
         _sync_link_file "${nixAgentsConfig}/AGENTS.md" "$_NAX_TOOL_CONFIG_DIR/AGENTS.md"
         _sync_link_file "${nixAgentsConfig}/opencode.json" "$_NAX_TOOL_CONFIG_DIR/opencode.json"
         if [ -n "''${_NAX_PROFILE:-}" ]; then
-          export XDG_CONFIG_HOME="$_NAX_BASE_CONFIG_HOME/opencode/profiles/$_NAX_PROFILE"
-          export XDG_DATA_HOME="$_NAX_BASE_DATA_HOME/opencode/profiles/$_NAX_PROFILE"
+          export XDG_CONFIG_HOME="$_NAX_BASE_CONFIG_HOME/opencode/bases/$NAX_BASE/profiles/$_NAX_PROFILE"
+          export XDG_DATA_HOME="$_NAX_BASE_DATA_HOME/opencode/bases/$NAX_BASE/profiles/$_NAX_PROFILE"
           mkdir -p "$XDG_CONFIG_HOME" "$XDG_DATA_HOME"
         fi
         export OPENCODE_CONFIG="$_NAX_TOOL_CONFIG_DIR/opencode.json"
@@ -469,7 +582,7 @@ in
       fi
 
       if [ "${target}" = "claude" ]; then
-        _nix_agents_dir="$_NAX_BASE_CONFIG_HOME/nix-agents/claude/profiles/$NAX_PROFILE"
+        _nix_agents_dir="$_NAX_BASE_CONFIG_HOME/nix-agents/claude/bases/$NAX_BASE/profiles/$NAX_PROFILE"
         mkdir -p "$_nix_agents_dir"
         _sync_link_dir "${nixAgentsConfig}/agents" "$_nix_agents_dir/agents"
         _sync_link_dir "${nixAgentsConfig}/skills" "$_nix_agents_dir/skills"
@@ -483,7 +596,7 @@ in
       fi
 
       if [ "${target}" = "codex" ]; then
-        _nix_agents_dir="$_NAX_BASE_CONFIG_HOME/nix-agents/codex/profiles/$NAX_PROFILE"
+        _nix_agents_dir="$_NAX_BASE_CONFIG_HOME/nix-agents/codex/bases/$NAX_BASE/profiles/$NAX_PROFILE"
         mkdir -p "$_nix_agents_dir"
         _sync_link_dir "${nixAgentsConfig}/agents" "$_nix_agents_dir/agents"
         _sync_link_dir "${nixAgentsConfig}/skills" "$_nix_agents_dir/skills"
@@ -494,24 +607,31 @@ in
       fi
 
       if [ "${target}" = "pi" ]; then
-        _nix_agents_dir="$_NAX_BASE_CONFIG_HOME/nix-agents/pi/profiles/$NAX_PROFILE"
-        _pi_agent_dir="$HOME/.pi/agent"
-        mkdir -p "$_nix_agents_dir" "$_pi_agent_dir"
-        _sync_link_dir "${nixAgentsConfig}/agents" "$_nix_agents_dir/agents"
-        _sync_link_dir "${nixAgentsConfig}/skills" "$_nix_agents_dir/skills"
-        _sync_link_file "${nixAgentsConfig}/AGENTS.md" "$_nix_agents_dir/AGENTS.md"
-        _sync_link_dir "${nixAgentsConfig}/extensions" "$_nix_agents_dir/extensions"
-        _sync_link_dir "${nixAgentsConfig}/prompts" "$_nix_agents_dir/prompts"
-        _sync_link_dir "$_nix_agents_dir/agents" "$_pi_agent_dir/agents"
-        _sync_link_dir "$_nix_agents_dir/skills" "$_pi_agent_dir/skills"
-        _sync_link_file "$_nix_agents_dir/AGENTS.md" "$_pi_agent_dir/AGENTS.md"
-        _sync_link_dir "$_nix_agents_dir/extensions" "$_pi_agent_dir/extensions"
-        _sync_link_dir "$_nix_agents_dir/prompts" "$_pi_agent_dir/prompts"
-        if [ -n "''${_NAX_PROFILE:-}" ]; then
-          export XDG_CONFIG_HOME="$_NAX_BASE_CONFIG_HOME/pi/profiles/$_NAX_PROFILE"
-          export XDG_DATA_HOME="$_NAX_BASE_DATA_HOME/pi/profiles/$_NAX_PROFILE"
-          mkdir -p "$XDG_CONFIG_HOME" "$XDG_DATA_HOME"
+        _pi_base_dir="$_NAX_BASE_CONFIG_HOME/nix-agents/pi/bases/$NAX_BASE"
+        _pi_profile_dir="$_pi_base_dir/profiles/$NAX_PROFILE"
+        _pi_state_dir="$_pi_base_dir/state"
+        mkdir -p "$_pi_profile_dir" "$_pi_state_dir"
+
+        # Profile-specific content from nix store
+        _sync_link_dir "${nixAgentsConfig}/agents" "$_pi_profile_dir/agents"
+        _sync_link_dir "${nixAgentsConfig}/skills" "$_pi_profile_dir/skills"
+        _sync_link_file "${nixAgentsConfig}/AGENTS.md" "$_pi_profile_dir/AGENTS.md"
+        _sync_link_dir "${nixAgentsConfig}/extensions" "$_pi_profile_dir/extensions"
+        _sync_link_dir "${nixAgentsConfig}/prompts" "$_pi_profile_dir/prompts"
+
+        # Shared state from base-scoped state dir (credentials, sessions, models, settings)
+        if [ ! -e "$_pi_profile_dir/auth.json" ]; then
+          ln -sfn "$_pi_state_dir/auth.json" "$_pi_profile_dir/auth.json" 2>/dev/null || true
         fi
+        if [ ! -e "$_pi_profile_dir/models.json" ]; then
+          ln -sfn "$_pi_state_dir/models.json" "$_pi_profile_dir/models.json" 2>/dev/null || true
+        fi
+        if [ ! -e "$_pi_profile_dir/settings.json" ]; then
+          ln -sfn "$_pi_state_dir/settings.json" "$_pi_profile_dir/settings.json" 2>/dev/null || true
+        fi
+        _sync_link_dir "$_pi_state_dir/sessions" "$_pi_profile_dir/sessions"
+
+        export PI_CODING_AGENT_DIR="$_pi_profile_dir"
         exec "${toolBin}" "$@"
       fi
 

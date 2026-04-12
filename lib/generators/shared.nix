@@ -36,6 +36,23 @@ let
   };
 in
 {
+  mkManagedAgentsSection =
+    agents: managedNames:
+    let
+      entries = map (name: "- `${name}`: ${agents.${name}.description}") managedNames;
+    in
+    if managedNames == [ ] then
+      ""
+    else
+      ''
+        ## Managed Agents
+
+        You may ONLY delegate to the following agents:
+        ${lib.concatStringsSep "\n" entries}
+
+        Do NOT invoke any agent not listed above. If you need work done outside your scope, report back to your caller with what you need.
+      '';
+
   mkHumanPreamble =
     human:
     let

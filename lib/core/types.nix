@@ -126,6 +126,32 @@ let
         type = types.lines;
         description = "Prompt body for the agent.";
       };
+      tier = mkOption {
+        type = types.nullOr (
+          types.enum [
+            "orchestrator"
+            "manager"
+            "employee"
+          ]
+        );
+        default = null;
+        description = "Tier in the delegation hierarchy. Null for flat-graph agents.";
+      };
+      managedAgents = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = "Agent names this manager/orchestrator can delegate to. Injected into prompt and used for future runtime filtering.";
+      };
+      extraTools = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = "Additional tools granted beyond tier defaults. Use sparingly for exceptions like COO needing read access.";
+      };
+      maxDelegationDepth = mkOption {
+        type = types.nullOr types.int;
+        default = null;
+        description = "Maximum recursive delegation depth. Null for system default.";
+      };
       delegatesTo = mkOption {
         type = types.listOf types.str;
         default = [ ];
@@ -202,6 +228,11 @@ let
         type = types.nullOr types.package;
         default = null;
       };
+      args = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = "Extra arguments appended after the binary when command is resolved from package. Ignored when command is set explicitly.";
+      };
       url = mkOption {
         type = types.nullOr types.str;
         default = null;
@@ -262,6 +293,29 @@ let
     "visual"
   ];
 
+  gitIdentityType = types.submodule {
+    options = {
+      userName = mkOption {
+        type = types.str;
+        description = "Git user.name for commits in this base.";
+      };
+      userEmail = mkOption {
+        type = types.str;
+        description = "Git user.email for commits in this base.";
+      };
+      signingKey = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = "Path or ID of the git signing key. Null disables signing env hint.";
+      };
+      gpgFormat = mkOption {
+        type = types.enum [ "openpgp" "ssh" "x509" ];
+        default = "ssh";
+        description = "Git gpg.format value.";
+      };
+    };
+  };
+
   humanType = types.submodule {
     options = {
       name = mkOption {
@@ -309,8 +363,51 @@ let
     };
   };
 
+  baseType = types.submodule {
+    options = {
+      stateDir = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = "Override for base runtime state directory. Null uses the target default.";
+      };
+      providers = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = "Provider names scoped to this base. Profiles within this base inherit these providers.";
+      };
+      human = mkOption {
+        type = types.nullOr humanType;
+        default = null;
+        description = "Base-scoped operator context. Profiles inherit this unless they override.";
+      };
+      git = mkOption {
+        type = types.nullOr gitIdentityType;
+        default = null;
+        description = "Git identity for commits in this base. Exported as GIT_AUTHOR/COMMITTER env vars by wrappers.";
+      };
+      defaultProfile = mkOption {
+        type = types.str;
+        default = "default";
+        description = "Name of the default profile within this base.";
+      };
+      pathPrefixes = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = "Filesystem path prefixes that activate profiles in this base.";
+      };
+    };
+  };
+
   profileType = types.submodule {
     options = {
+      base = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = ''
+          Base this profile belongs to. When null, the profile uses the implicit
+          "default" base during migration. In the future, this will become required.
+        '';
+      };
       pathPrefixes = mkOption {
         type = types.listOf types.str;
         default = [ ];
@@ -367,9 +464,11 @@ in
     mcpServerType
     eventType
     hookType
+    gitIdentityType
     cognitiveStyleType
     humanType
     providerType
+    baseType
     profileType
     ;
   agents = types.attrsOf agentType;
@@ -377,5 +476,6 @@ in
   mcpServers = types.attrsOf mcpServerType;
   hooks = types.listOf hookType;
   providers = types.attrsOf providerType;
+  bases = types.attrsOf baseType;
   profiles = types.attrsOf profileType;
 }
