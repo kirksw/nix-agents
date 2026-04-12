@@ -501,24 +501,30 @@ in
       fi
 
       if [ "${target}" = "pi" ]; then
-        _nix_agents_dir="$_NAX_BASE_CONFIG_HOME/nix-agents/pi/profiles/$NAX_PROFILE"
-        _pi_agent_dir="$HOME/.pi/agent"
-        mkdir -p "$_nix_agents_dir" "$_pi_agent_dir"
-        _sync_link_dir "${nixAgentsConfig}/agents" "$_nix_agents_dir/agents"
-        _sync_link_dir "${nixAgentsConfig}/skills" "$_nix_agents_dir/skills"
-        _sync_link_file "${nixAgentsConfig}/AGENTS.md" "$_nix_agents_dir/AGENTS.md"
-        _sync_link_dir "${nixAgentsConfig}/extensions" "$_nix_agents_dir/extensions"
-        _sync_link_dir "${nixAgentsConfig}/prompts" "$_nix_agents_dir/prompts"
-        _sync_link_dir "$_nix_agents_dir/agents" "$_pi_agent_dir/agents"
-        _sync_link_dir "$_nix_agents_dir/skills" "$_pi_agent_dir/skills"
-        _sync_link_file "$_nix_agents_dir/AGENTS.md" "$_pi_agent_dir/AGENTS.md"
-        _sync_link_dir "$_nix_agents_dir/extensions" "$_pi_agent_dir/extensions"
-        _sync_link_dir "$_nix_agents_dir/prompts" "$_pi_agent_dir/prompts"
-        if [ -n "''${_NAX_PROFILE:-}" ]; then
-          export XDG_CONFIG_HOME="$_NAX_BASE_CONFIG_HOME/pi/profiles/$_NAX_PROFILE"
-          export XDG_DATA_HOME="$_NAX_BASE_DATA_HOME/pi/profiles/$_NAX_PROFILE"
-          mkdir -p "$XDG_CONFIG_HOME" "$XDG_DATA_HOME"
+        _pi_shared_dir="$HOME/.pi/agent"
+        _pi_profile_dir="$_NAX_BASE_CONFIG_HOME/nix-agents/pi/profiles/$NAX_PROFILE"
+        mkdir -p "$_pi_profile_dir" "$_pi_shared_dir"
+
+        # Profile-specific content from nix store
+        _sync_link_dir "${nixAgentsConfig}/agents" "$_pi_profile_dir/agents"
+        _sync_link_dir "${nixAgentsConfig}/skills" "$_pi_profile_dir/skills"
+        _sync_link_file "${nixAgentsConfig}/AGENTS.md" "$_pi_profile_dir/AGENTS.md"
+        _sync_link_dir "${nixAgentsConfig}/extensions" "$_pi_profile_dir/extensions"
+        _sync_link_dir "${nixAgentsConfig}/prompts" "$_pi_profile_dir/prompts"
+
+        # Shared state from ~/.pi/agent (credentials, sessions, models, settings)
+        if [ ! -e "$_pi_profile_dir/auth.json" ]; then
+          ln -sfn "$_pi_shared_dir/auth.json" "$_pi_profile_dir/auth.json" 2>/dev/null || true
         fi
+        if [ ! -e "$_pi_profile_dir/models.json" ]; then
+          ln -sfn "$_pi_shared_dir/models.json" "$_pi_profile_dir/models.json" 2>/dev/null || true
+        fi
+        if [ ! -e "$_pi_profile_dir/settings.json" ]; then
+          ln -sfn "$_pi_shared_dir/settings.json" "$_pi_profile_dir/settings.json" 2>/dev/null || true
+        fi
+        _sync_link_dir "$_pi_shared_dir/sessions" "$_pi_profile_dir/sessions"
+
+        export PI_CODING_AGENT_DIR="$_pi_profile_dir"
         exec "${toolBin}" "$@"
       fi
 
