@@ -67,31 +67,5 @@ _: {
 
     # work/team: same work auth, team-optimized delegation
     # (future: add team-specific agents/skills here)
-    work-team = {
-      base = "work";
-      pathPrefixes = [ ];
-      agents = [
-        "10xBEAST"
-        "the-architect"
-        "code-monkey"
-        "explore"
-        "bottleneck"
-        "chaos-demon"
-        "code-red"
-        "scribe"
-      ];
-      skills = [ "nix-module-workflow" ];
-      mcpServers = [ ];
-      tierMapping = {
-        powerful = "anthropic/claude-sonnet-4-6";
-        reasoning = "anthropic/claude-opus-4-6";
-      };
-      permissions = {
-        edit = null;
-        bash = null;
-        task = null;
-        webfetch = "deny";
-      };
-    };
   };
 }

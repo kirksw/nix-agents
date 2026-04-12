@@ -316,13 +316,6 @@
               skills = [ ];
               mcpServers = [ ];
             };
-            work-team = {
-              base = "work";
-              providers = [ ];
-              agents = [ ];
-              skills = [ ];
-              mcpServers = [ ];
-            };
             personal-stable = {
               base = "personal";
               providers = [ ];
@@ -347,21 +340,17 @@
 
       # Extract base and provider count for each profile
       wsBase = meta.work-stable.base;
-      wtBase = meta.work-team.base;
       psBase = meta.personal-stable.base;
       wsProvCount = builtins.toString (builtins.length meta.work-stable.providers);
-      wtProvCount = builtins.toString (builtins.length meta.work-team.providers);
       psProvCount = builtins.toString (builtins.length meta.personal-stable.providers);
     in
     pkgs.runCommand "eval-base-provider-isolation" { } ''
-      # Work profiles share work base
+      # Work profile has work base
       [ "${wsBase}" = "work" ] || { echo "FAIL: work-stable base=${wsBase}" >&2; exit 1; }
-      [ "${wtBase}" = "work" ] || { echo "FAIL: work-team base=${wtBase}" >&2; exit 1; }
       # Personal profile has personal base
       [ "${psBase}" = "personal" ] || { echo "FAIL: personal-stable base=${psBase}" >&2; exit 1; }
       # Each profile inherits exactly 1 provider from its base
       [ "${wsProvCount}" = "1" ] || { echo "FAIL: work-stable providers=${wsProvCount}" >&2; exit 1; }
-      [ "${wtProvCount}" = "1" ] || { echo "FAIL: work-team providers=${wtProvCount}" >&2; exit 1; }
       [ "${psProvCount}" = "1" ] || { echo "FAIL: personal-stable providers=${psProvCount}" >&2; exit 1; }
       touch $out
     '';
