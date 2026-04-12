@@ -427,8 +427,7 @@ in
       # case arms: profile name -> (base, store path)
       profilePathCaseArms = lib.concatStringsSep "\n" (
         lib.mapAttrsToList (
-          name: meta:
-          "          ${name}) _NAX_CONFIG=${meta.storePath}; _NAX_BASE=\"${meta.base}\" ;;"
+          name: meta: "          ${name}) _NAX_CONFIG=${meta.storePath}; _NAX_BASE=\"${meta.base}\" ;;"
         ) profileMeta
       );
 
