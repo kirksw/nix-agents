@@ -28,8 +28,8 @@ let
   generatorDefaults = {
     fast = "minimax/minimax-m2.7-highspeed";
     balanced = "openai/gpt-5.3-codex";
-    powerful = "glm/glm-5.1";
-    reasoning = "glm/glm-5.1";
+    powerful = "zai/glm-5.1";
+    reasoning = "zai/glm-5.1";
   };
   tierModels = generatorDefaults // config.tierMapping;
   resolveModel = m: tierModels.${m} or m;
