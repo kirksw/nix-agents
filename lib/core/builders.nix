@@ -638,12 +638,41 @@ in
         fi
       }
 
+      # Symlink persisted base-scoped settings files into the profile directory
+      # and source environment overrides.
+      # Files live at ~/.config/nix-agents/<tool>/bases/<base>/settings/ and survive
+      # nix store syncs. This lets users maintain per-base overrides (e.g. EU API
+      # endpoints for work bases) without them being wiped on each launch.
+      #
+      # Regular files are symlinked into the profile directory.
+      # An "env" file is sourced (not symlinked) to export environment variables
+      # like OPENAI_BASE_URL. It should contain lines of the form:
+      #   export VAR=value
+      _link_base_settings() {
+        local _settings_dir="$1"
+        local _profile_dir="$2"
+        if [ -d "$_settings_dir" ]; then
+          # Source env file first so exports are available before tool launch
+          if [ -f "$_settings_dir/env" ]; then
+            . "$_settings_dir/env"
+          fi
+          for _f in "$_settings_dir"/*; do
+            [ -f "$_f" ] || continue
+            _name="''${_f##*/}"
+            # env is sourced, not symlinked
+            [ "$_name" = "env" ] && continue
+            ln -sfn "$_f" "$_profile_dir/$_name" 2>/dev/null || true
+          done
+        fi
+      }
+
       if [ "${target}" = "opencode" ]; then
         mkdir -p "$_NAX_TOOL_CONFIG_DIR"
         _sync_link_dir "${nixAgentsConfig}/agents" "$_NAX_TOOL_CONFIG_DIR/agents"
         _sync_link_dir "${nixAgentsConfig}/skills" "$_NAX_TOOL_CONFIG_DIR/skills"
         _sync_link_file "${nixAgentsConfig}/AGENTS.md" "$_NAX_TOOL_CONFIG_DIR/AGENTS.md"
         _sync_link_file "${nixAgentsConfig}/opencode.json" "$_NAX_TOOL_CONFIG_DIR/opencode.json"
+        _link_base_settings "$_NAX_BASE_CONFIG_HOME/nix-agents/opencode/bases/$NAX_BASE/settings" "$_NAX_TOOL_CONFIG_DIR"
         if [ -n "''${_NAX_PROFILE:-}" ]; then
           export XDG_CONFIG_HOME="$_NAX_BASE_CONFIG_HOME/opencode/bases/$NAX_BASE/profiles/$_NAX_PROFILE"
           export XDG_DATA_HOME="$_NAX_BASE_DATA_HOME/opencode/bases/$NAX_BASE/profiles/$_NAX_PROFILE"
@@ -662,6 +691,7 @@ in
         _sync_link_file "${nixAgentsConfig}/CLAUDE.md" "$_nix_agents_dir/CLAUDE.md"
         _sync_link_file "${nixAgentsConfig}/settings.json" "$_nix_agents_dir/settings.json"
         _sync_link_file "${nixAgentsConfig}/.mcp.json" "$_nix_agents_dir/.mcp.json"
+        _link_base_settings "$_NAX_BASE_CONFIG_HOME/nix-agents/claude/bases/$NAX_BASE/settings" "$_nix_agents_dir"
         export CLAUDE_CONFIG_DIR="$_nix_agents_dir"
         set -- --settings "$_nix_agents_dir/settings.json" "$@"
         [ -f "$_nix_agents_dir/.mcp.json" ] && set -- --mcp-config "$_nix_agents_dir/.mcp.json" "$@"
@@ -675,7 +705,8 @@ in
         _sync_link_dir "${nixAgentsConfig}/skills" "$_nix_agents_dir/skills"
         _sync_link_file "${nixAgentsConfig}/AGENTS.md" "$_nix_agents_dir/AGENTS.md"
         _sync_link_file "${nixAgentsConfig}/mcp.json" "$_nix_agents_dir/mcp.json"
-        export CODEX_CONFIG_DIR="$_nix_agents_dir"
+        _link_base_settings "$_NAX_BASE_CONFIG_HOME/nix-agents/codex/bases/$NAX_BASE/settings" "$_nix_agents_dir"
+        export CODEX_HOME="$_nix_agents_dir"
         exec "${toolBin}" "$@"
       fi
 
@@ -703,6 +734,8 @@ in
           ln -sfn "$_pi_state_dir/settings.json" "$_pi_profile_dir/settings.json" 2>/dev/null || true
         fi
         _sync_link_dir "$_pi_state_dir/sessions" "$_pi_profile_dir/sessions"
+
+        _link_base_settings "$_NAX_BASE_CONFIG_HOME/nix-agents/pi/bases/$NAX_BASE/settings" "$_pi_profile_dir"
 
         export PI_CODING_AGENT_DIR="$_pi_profile_dir"
         exec "${toolBin}" "$@"
