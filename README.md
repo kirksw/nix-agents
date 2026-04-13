@@ -83,9 +83,8 @@ canonical `nix-agents` asset root.
 | Skill | Description |
 |-------|-------------|
 | `swe-pruner-mcp` | Compact code scanning via MCP tools |
-| `nix-coding-style` | Nix formatting and style conventions |
-| `nix-flake-ops` | Flake composition patterns |
-| `nix-module-workflow` | Composable Nix module patterns |
+| `nix-agents` | Nix-agents coding style, module workflow, and flake operations |
+| `system-context` | Local machine and nix-agents source-of-truth context |
 | `skill-creator` | Recipe for creating new skills |
 
 ## Observability

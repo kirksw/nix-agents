@@ -9,14 +9,13 @@
     ../defs/agents/code-red.nix
     ../defs/agents/scribe.nix
     ../defs/agents/explore.nix
-    ../defs/skills/nix-coding-style.nix
-    ../defs/skills/nix-flake-ops.nix
-    ../defs/skills/nix-module-workflow.nix
+    ../defs/skills/nix-agents
+    ../defs/skills/system-context
     ../defs/skills/secrets-management.nix
-    ../defs/skills/skill-creator.nix
+    ../defs/skills/skill-creator
     ../defs/skills/session-resume.nix
-    ../defs/skills/add-module.nix
-    ../defs/skills/parallel-reviews.nix
+    ../defs/skills/add-module
+    ../defs/skills/parallel-reviews
     ../defs/mcps/agent-observe.nix
     ../defs/mcps/swe-pruner.nix
     # NOTE: session-write hooks require pkgs and must be wired in flake.nix:
