@@ -82,7 +82,10 @@ _: {
         "code-red"
         "scribe"
       ];
-      skills = [ "nix-module-workflow" ];
+      skills = [
+        "nix-agents"
+        "system-context"
+      ];
       mcpServers = [ ];
       tierMapping = {
         powerful = "anthropic/claude-sonnet-4-6";
