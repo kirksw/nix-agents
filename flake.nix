@@ -85,7 +85,9 @@
           src = ./.;
         };
 
-        piCodingAgent = pkgs.callPackage ./targets/pi/package { };
+        # Use upstream Pi package from llm-agents.nix rather than the local
+        # pinned package definition under targets/pi/package.
+        piCodingAgent = agentPkgs.pi;
 
         updateScript = pkgs.writeShellApplication {
           name = "update";
@@ -635,7 +637,7 @@
     )
     // {
       overlays.default = final: prev: {
-        pi-coding-agent = final.callPackage ./targets/pi/package { };
+        pi-coding-agent = llm-agents.packages.${final.system}.pi;
       };
 
       templates.default = {
