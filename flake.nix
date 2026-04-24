@@ -367,6 +367,7 @@
           amp-config = ampConfig;
           tiered-pi-config = tieredPiConfig;
           pi-coding-agent = piCodingAgent;
+          multica = pkgs.callPackage ./packages/multica { };
           update-script = updateScript;
           observe-service = pkgs.callPackage ./services/agent-observe { };
           swe-pruner = pkgs.callPackage ./services/swe-pruner { };
