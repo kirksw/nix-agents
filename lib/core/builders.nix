@@ -494,10 +494,7 @@ in
           null;
 
       fallbackProfileMeta =
-        if fallbackProfileName != null then
-          profileMeta.${fallbackProfileName}
-        else
-          null;
+        if fallbackProfileName != null then profileMeta.${fallbackProfileName} else null;
 
       profileDetectionBlock = lib.optionalString hasProfiles ''
         if [ -z "$_NAX_PROFILE" ]; then
@@ -565,16 +562,16 @@ in
           mkGitArm =
             name: meta:
             lib.optionalString (meta.git != null) ''
-                ${name})
-                  export GIT_AUTHOR_NAME="${meta.git.userName}"
-                  export GIT_AUTHOR_EMAIL="${meta.git.userEmail}"
-                  export GIT_COMMITTER_NAME="${meta.git.userName}"
-                  export GIT_COMMITTER_EMAIL="${meta.git.userEmail}"
-                  ${lib.optionalString (meta.git.signingKey != null) ''
-                    export GIT_AUTHOR_SIGNINGKEY="${meta.git.signingKey}"
-                    export GIT_COMMITTER_SIGNINGKEY="${meta.git.signingKey}"
-                  ''}
-                  ;;
+              ${name})
+                export GIT_AUTHOR_NAME="${meta.git.userName}"
+                export GIT_AUTHOR_EMAIL="${meta.git.userEmail}"
+                export GIT_COMMITTER_NAME="${meta.git.userName}"
+                export GIT_COMMITTER_EMAIL="${meta.git.userEmail}"
+                ${lib.optionalString (meta.git.signingKey != null) ''
+                  export GIT_AUTHOR_SIGNINGKEY="${meta.git.signingKey}"
+                  export GIT_COMMITTER_SIGNINGKEY="${meta.git.signingKey}"
+                ''}
+                ;;
             '';
           arms = lib.concatStrings (lib.mapAttrsToList mkGitArm profileMeta);
         in

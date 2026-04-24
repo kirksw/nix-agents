@@ -309,7 +309,11 @@ let
         description = "Path or ID of the git signing key. Null disables signing env hint.";
       };
       gpgFormat = mkOption {
-        type = types.enum [ "openpgp" "ssh" "x509" ];
+        type = types.enum [
+          "openpgp"
+          "ssh"
+          "x509"
+        ];
         default = "ssh";
         description = "Git gpg.format value.";
       };

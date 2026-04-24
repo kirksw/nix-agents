@@ -119,7 +119,7 @@
             target = "opencode";
             tool = agentPkgs.opencode;
             agentSystem = myAgentSystem;
-            profileMeta = profileMeta;
+            inherit profileMeta;
           };
 
           claude = agentsLib.mkWrappedTool {
