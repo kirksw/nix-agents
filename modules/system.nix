@@ -143,18 +143,21 @@ let
     else
       true;
 
-  # ADR-0001: Every profile that declares a base must reference an existing base.
+  # ADR-0001: Every profile must declare a base and reference an existing base.
   checkBaseExistence =
     let
       baseNames = builtins.attrNames config.bases;
       profileNames = builtins.attrNames config.profiles;
-      # Only check profiles that explicitly set a base field
-      explicitProfiles = lib.filter (p: config.profiles.${p}.base != null) profileNames;
-      bad = lib.filter (p: !builtins.elem config.profiles.${p}.base baseNames) explicitProfiles;
+      missing = lib.filter (p: config.profiles.${p}.base == null) profileNames;
+      nonexistent = lib.filter (
+        p: config.profiles.${p}.base != null && !builtins.elem config.profiles.${p}.base baseNames
+      ) profileNames;
     in
-    if bad != [ ] then
+    if missing != [ ] then
+      throw "Profiles must declare a base: ${lib.concatStringsSep ", " missing}"
+    else if nonexistent != [ ] then
       throw "Profiles reference nonexistent bases: ${
-        lib.concatStringsSep ", " (map (p: "${p} -> ${config.profiles.${p}.base}") bad)
+        lib.concatStringsSep ", " (map (p: "${p} -> ${config.profiles.${p}.base}") nonexistent)
       }"
     else
       true;
@@ -163,11 +166,10 @@ let
   checkBaseStateDirUniqueness =
     let
       baseEntries = lib.filterAttrs (_: b: b.stateDir != null) config.bases;
-      # Group bases by their stateDir
-      byDir = lib.foldAttrs (name: _: [ name ]) [ ] (
+      byDir = builtins.groupBy (entry: entry.stateDir) (
         lib.mapAttrsToList (name: b: {
-          name = b.stateDir;
-          value = name;
+          inherit name;
+          inherit (b) stateDir;
         }) baseEntries
       );
       duplicates = lib.filterAttrs (_: names: builtins.length names > 1) byDir;
@@ -175,7 +177,9 @@ let
     if duplicates != { } then
       throw "Bases share stateDir: ${
         lib.concatStringsSep ", " (
-          lib.mapAttrsToList (dir: names: "${lib.concatStringsSep ", " names} -> ${dir}") duplicates
+          lib.mapAttrsToList (
+            dir: entries: "${lib.concatStringsSep ", " (map (entry: entry.name) entries)} -> ${dir}"
+          ) duplicates
         )
       }"
     else

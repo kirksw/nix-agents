@@ -140,7 +140,11 @@ let
         specialArgs = { inherit inputs pkgs; };
       };
       rawConfig = evaluated.config;
-      config = if profile != null then resolveProfile rawConfig profile else rawConfig;
+      config =
+        if rawConfig._validated then
+          if profile != null then resolveProfile rawConfig profile else rawConfig
+        else
+          throw "nix-agents validation failed";
       generated = mkGenerator target {
         inherit
           lib
