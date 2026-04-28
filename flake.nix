@@ -612,8 +612,8 @@
             grep -q 'export NAX_BASE=' "$pi_wrapper"
 
             # Profile meta must contain actual profile names
-            grep -q 'work-stable' "$opencode_wrapper"
-            grep -q 'personal-stable' "$pi_wrapper"
+            grep -q 'work-default' "$opencode_wrapper"
+            grep -q 'personal-default' "$pi_wrapper"
             touch $out
           '';
 
