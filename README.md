@@ -65,6 +65,20 @@ When a profile is selected or forced, generated agent assets are projected into
 OpenCode and Pi, still keep their own tool-specific XDG profile directories alongside that
 canonical `nix-agents` asset root.
 
+### Run a self-hosted Multica server
+
+The flake packages the Multica CLI and a `multica-selfhost` helper pinned to the same upstream release.
+The helper mirrors Multica's installer flow: it creates `~/.multica/server/.env`, generates `JWT_SECRET`,
+and starts the official Docker Compose stack.
+
+```bash
+nix run .#multica-selfhost
+nix run .#multica-selfhost -- setup-cli
+```
+
+The web UI starts at <http://localhost:3000> and the backend at <http://localhost:8080>. Use
+`MULTICA_INSTALL_DIR` to keep server state somewhere other than `~/.multica/server`.
+
 ## Built-in agents
 
 | Agent | Mode | Role |
