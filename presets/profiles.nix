@@ -28,7 +28,7 @@ _: {
         "personal-zai-key"
         "personal-minimax-key"
       ];
-      defaultProfile = "stable";
+      defaultProfile = "default";
       git = {
         userName = "Kirk Sweeney";
         userEmail = "kirk@cntd.io";
