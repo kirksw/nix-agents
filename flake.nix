@@ -368,6 +368,10 @@
           tiered-pi-config = tieredPiConfig;
           pi-coding-agent = piCodingAgent;
           multica = pkgs.callPackage ./packages/multica { };
+          multica-selfhost = pkgs.callPackage ./packages/multica-selfhost {
+            inherit (self.packages.${system}) multica;
+            inherit (pkgs) docker-compose;
+          };
           update-script = updateScript;
           observe-service = pkgs.callPackage ./services/agent-observe { };
           swe-pruner = pkgs.callPackage ./services/swe-pruner { };
@@ -391,6 +395,10 @@
           observe = {
             type = "app";
             program = "${self.packages.${system}.observe-service}/bin/agent-observe";
+          };
+          multica-selfhost = {
+            type = "app";
+            program = "${self.packages.${system}.multica-selfhost}/bin/multica-selfhost";
           };
           update = {
             type = "app";
@@ -603,7 +611,7 @@
             grep -q 'bases/\$NAX_BASE/profiles/\$NAX_PROFILE' "$pi_wrapper"
 
             # Pi must use co-located base-scoped state
-            grep -q 'nix-agents/pi/bases/\$NAX_BASE/state' "$pi_wrapper"
+            grep -q '_pi_state_dir="\$_pi_base_dir/state"' "$pi_wrapper"
 
             # All wrappers must export NAX_BASE
             grep -q 'export NAX_BASE=' "$opencode_wrapper"

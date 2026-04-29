@@ -247,9 +247,7 @@
   # ADR-0001 base/profile model evals
   # --------------------------------------------------------------------------
 
-  # Flat profile names resolve to default base when no base field is set.
-  # This is the backward-compatibility path — existing configs must continue
-  # to work without any bases defined.
+  # Flat profile names resolve through each profile's explicit base field.
   eval-base-profile-resolution =
     let
       lib' = pkgs.lib;
@@ -451,22 +449,17 @@
         lib = lib';
         inherit types;
       };
-      builders = import ../lib/core/builders.nix {
-        lib = lib';
-        inherit evalModules;
-      };
 
-      cfg =
-        (evalModules {
-          modules = [
-            {
-              profiles.rogue = {
-                pathPrefixes = [ "~/rogue/" ];
-              };
-            }
-          ];
-        }).config;
-      result = builtins.tryEval (builders.resolveBaseProfile cfg "rogue");
+      cfg = evalModules {
+        modules = [
+          {
+            profiles.rogue = {
+              pathPrefixes = [ "~/rogue/" ];
+            };
+          }
+        ];
+      };
+      result = builtins.tryEval cfg.config._validated;
     in
     pkgs.runCommand "eval-base-required-reject" { } ''
       ${
