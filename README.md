@@ -79,6 +79,14 @@ nix run .#multica-selfhost -- setup-cli
 The web UI starts at <http://localhost:3000> and the backend at <http://localhost:8080>. Use
 `MULTICA_INSTALL_DIR` to keep server state somewhere other than `~/.multica/server`.
 
+### Run OpenShell
+
+The flake exposes the nixpkgs `openshell` package for launching sandboxed agent sessions:
+
+```bash
+nix run .#openshell -- sandbox create -- codex
+```
+
 ## Built-in agents
 
 | Agent | Mode | Role |

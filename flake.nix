@@ -331,6 +331,7 @@
         };
 
         packages = {
+          inherit (pkgs) openshell;
           opencode-config = opencodeConfig;
           claude-config = claudeConfig;
           codex-config = codexConfig;
@@ -395,6 +396,10 @@
           observe = {
             type = "app";
             program = "${self.packages.${system}.observe-service}/bin/agent-observe";
+          };
+          openshell = {
+            type = "app";
+            program = "${self.packages.${system}.openshell}/bin/openshell";
           };
           multica-selfhost = {
             type = "app";
