@@ -624,6 +624,14 @@
             grep -q 'export NAX_BASE=' "$codex_wrapper"
             grep -q 'export NAX_BASE=' "$pi_wrapper"
 
+            # Profile sandboxes must route through OpenShell and upload profile config.
+            grep -q 'openshell.*/bin/openshell' "$codex_wrapper"
+            grep -q 'sandbox create' "$codex_wrapper"
+            grep -q '_NAX_SANDBOX_PROFILE_CONFIG_DIR' "$codex_wrapper"
+            grep -q 'nix-agents-openshell' "$codex_wrapper"
+            grep -q '_nax_args+=(--upload "$_nax_stage")' "$codex_wrapper"
+            ! grep -q '_NAX_SANDBOX_PROFILE_CONFIG_DIR:$_NAX_SANDBOX_PROFILE_CONFIG_DIR' "$codex_wrapper"
+
             # Profile meta must contain actual profile names
             grep -q 'work-default' "$opencode_wrapper"
             grep -q 'personal-default' "$pi_wrapper"

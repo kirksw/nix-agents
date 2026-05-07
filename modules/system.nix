@@ -107,6 +107,7 @@ let
       allSkills = builtins.attrNames config.skills;
       allMcp = builtins.attrNames config.mcpServers;
       allProviders = builtins.attrNames config.providers;
+      allSandboxes = builtins.attrNames config.sandboxes;
 
       badAgents = lib.concatMap (
         p:
@@ -136,7 +137,18 @@ let
         )
       ) profileNames;
 
-      bad = badAgents ++ badSkills ++ badMcp ++ badProviders;
+      badSandboxes = lib.concatMap (
+        p:
+        let
+          inherit (config.profiles.${p}) sandbox;
+        in
+        if sandbox != null && !builtins.elem sandbox allSandboxes then
+          [ "${p}.sandbox: ${sandbox}" ]
+        else
+          [ ]
+      ) profileNames;
+
+      bad = badAgents ++ badSkills ++ badMcp ++ badProviders ++ badSandboxes;
     in
     if bad != [ ] then
       throw "Profile references do not exist: ${lib.concatStringsSep ", " bad}"

@@ -76,14 +76,20 @@
               #   pathPrefixes = [ "~/src/" "~/projects/" ];
               #   providers = [ "personal-api-key" ];
               # };
+              # sandboxes.default-agent = {
+              #   uploadProject = true;
+              #   uploadProfileConfig = true;
+              # };
               # profiles.work-stable = {
               #   base = "work";
               #   agents = [ "code-monkey" "explore" ];
               #   permissions.webfetch = "deny";
+              #   sandbox = "default-agent";
               # };
               # profiles.personal-stable = {
               #   base = "personal";
               #   # inherits all agents by default
+              #   sandbox = "default-agent";
               # };
             }
           ];

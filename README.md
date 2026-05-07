@@ -61,9 +61,10 @@ This scaffolds a flake that imports the default preset and lets you add agents, 
 
 `mkWrappedTool` also accepts `profile = "<name>"` to force a specific runtime profile namespace.
 When a profile is selected or forced, generated agent assets are projected into
-`~/.config/nix-agents/<tool>/profiles/<profile>`. Tools that keep native runtime state, such as
-OpenCode and Pi, still keep their own tool-specific XDG profile directories alongside that
-canonical `nix-agents` asset root.
+`~/.config/nix-agents/<tool>/bases/<base>/profiles/<profile>`. Profiles may also select a named
+OpenShell sandbox. In that case the wrapper syncs the generated profile config locally, uploads it
+into the sandbox, uploads the current project by default, and runs the target command through
+`openshell sandbox create`.
 
 ### Run a self-hosted Multica server
 
@@ -81,10 +82,27 @@ The web UI starts at <http://localhost:3000> and the backend at <http://localhos
 
 ### Run OpenShell
 
-The flake exposes the nixpkgs `openshell` package for launching sandboxed agent sessions:
+The flake exposes the nixpkgs `openshell` package and the built-in profiles use named sandbox
+configs from `presets/profiles.nix`. You can still launch OpenShell directly:
 
 ```bash
 nix run .#openshell -- sandbox create -- codex
+```
+
+Profiles opt into sandboxing with `profiles.<name>.sandbox`:
+
+```nix
+{
+  sandboxes.project-agent = {
+    from = "openclaw";
+    providers = [ "github" ];
+    uploadProject = true;
+    uploadProfileConfig = true;
+    autoProviders = true;
+  };
+
+  profiles.personal-default.sandbox = "project-agent";
+}
 ```
 
 ## Built-in agents

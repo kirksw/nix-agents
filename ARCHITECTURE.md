@@ -4,16 +4,17 @@
 
 nix-agents defines LLM agent teams once in Nix and generates tool-specific configs for OpenCode, Claude Code, Codex, Cursor, Amp, and Pi from a single source of truth.
 
-The system uses a **base/profile hierarchy** (ADR-0001) for runtime state isolation:
+The system uses a **base/profile hierarchy** (ADR-0001) for runtime state isolation and optional OpenShell sandboxing:
 - **Base** = security/account/environment boundary (owns credentials, auth, sessions)
 - **Profile** = configuration overlay within a base (agents, skills, tier mappings, permissions)
+- **Sandbox** = named OpenShell launch configuration selected by a profile
 
 ```mermaid
 graph TD
     A[defs/agents/] --> E[lib/core/eval.nix]
     S[defs/skills/] --> E
     M[defs/mcps/] --> E
-    H[human / bases / profiles / providers] --> E
+    H[human / bases / profiles / providers / sandboxes] --> E
     E --> |evalModules| C[Evaluated Config]
     C --> G1[generators/opencode.nix]
     C --> G2[generators/claude-code.nix]
@@ -40,7 +41,7 @@ nix-agents/
 ├── lib/
 │   ├── default.nix            # Public API: types, evalModules, mkAgentSystem, mkWrappedTool, resolveBaseProfile
 │   └── core/
-│       ├── types.nix          # Option types: agent, skill, mcp-server, human, provider, base, profile, hook
+│       ├── types.nix          # Option types: agent, skill, mcp-server, human, provider, sandbox, base, profile, hook
 │       ├── eval.nix           # lib.evalModules wrapper (wires all modules + specialArgs)
 │       ├── builders.nix       # mkAgentSystem (evaluate + generate + build store path)
 │       │                      # resolveBaseProfile (normalize profile IDs to { base, profile })
@@ -64,6 +65,7 @@ nix-agents/
 │   ├── mcp-server.nix         # Declares `mcpServers` option
 │   ├── human.nix              # Declares `human` option (operator context)
 │   ├── provider.nix           # Declares `providers` option (credential sources)
+│   ├── sandbox.nix            # Declares `sandboxes` option (OpenShell launch configs)
 │   ├── base.nix               # Declares `bases` option (ADR-0001 environment boundaries)
 │   ├── profile.nix            # Declares `profiles` option (configuration overlays within bases)
 │   └── hook.nix               # Declares `hooks` option (event-triggered shell scripts)
@@ -86,13 +88,13 @@ nix-agents/
 
 ## Data Flow
 
-1. **Definition** — Agents, skills, MCP servers, human context, providers, bases, and profiles are plain Nix attrsets in `defs/`.
+1. **Definition** — Agents, skills, MCP servers, human context, providers, sandboxes, bases, and profiles are plain Nix attrsets in `defs/` or presets.
 2. **Composition** — `presets/default.nix` imports all built-in definitions. Downstream users can import a preset and overlay their own.
 3. **Evaluation** — `lib/core/eval.nix` calls `lib.evalModules` with all 9 module declarations. `modules/system.nix` validates the agent graph, profile references, and base invariants at eval time.
 4. **Base resolution** — `lib/core/builders.nix` `resolveBaseProfile` normalizes profile identifiers into `{ base, profile }`. Every profile must declare a `base` field.
 5. **Profile resolution** — `resolveProfile` filters agents/skills/MCP servers and merges base-scoped providers, human context, tier mappings, and permission overrides.
 6. **Generation** — Each generator transforms the evaluated (and optionally profile-filtered) config into tool-specific output files.
-7. **Building** — `mkAgentSystem` writes the generated output to a Nix store path. `mkWrappedTool` creates a shell wrapper that resolves credentials, selects the active profile by `$PWD`, and execs the real tool binary.
+7. **Building** — `mkAgentSystem` writes the generated output to a Nix store path. `mkWrappedTool` creates a shell wrapper that resolves credentials, selects the active profile by `$PWD`, syncs profile assets, and either execs the local tool binary or launches it through `openshell sandbox create`.
 
 ## Base/Profile Model (ADR-0001)
 
@@ -144,6 +146,28 @@ Every profile must declare a `base` field referencing an existing entry in `conf
 | `human` | `nullOr humanType` | Human context override for this profile |
 | `tierMapping` | `attrsOf str` | Profile-local tier overrides merged over system tierMapping |
 | `permissions` | `nullOr permissionsType` | Profile-local permission defaults |
+| `sandbox` | `nullOr str` | Named OpenShell sandbox config for this profile |
+
+### Sandbox
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `from` | `nullOr str` | OpenShell sandbox source passed with `--from` |
+| `command` | `nullOr str` | Remote executable to run; null uses the target name |
+| `keep` | `bool` | Keep the sandbox alive after the tool exits |
+| `gpu` | `bool` | Request GPU resources |
+| `providers` | `listOf str` | OpenShell provider names attached with `--provider` |
+| `policy` | `nullOr path` | Custom OpenShell policy YAML |
+| `forward` | `listOf str` | Port forwards |
+| `uploadProfileConfig` | `bool` | Upload generated profile config into the sandbox |
+| `uploadProject` | `bool` | Upload the current project directory |
+| `useGitIgnore` | `bool` | Respect `.gitignore` while uploading |
+| `autoProviders` | `nullOr bool` | Enable or disable OpenShell auto-provider creation |
+| `tty` | `nullOr bool` | Force or disable TTY allocation |
+| `noBootstrap` | `bool` | Disable gateway auto-bootstrap |
+| `remote` | `nullOr str` | SSH destination for remote bootstrap |
+| `sshKey` | `nullOr str` | SSH key path for remote bootstrap |
+| `extraArgs` | `listOf str` | Additional raw `sandbox create` args |
 
 ### Agent
 
@@ -216,7 +240,7 @@ permissionSet = { default : permission; rules : attrsOf permission; }
 3. Task permission rules only reference existing agents
 4. Every skill reference resolves to a defined skill
 5. Every MCP server reference resolves to a defined server
-6. Every profile's `agents`, `skills`, `mcpServers`, and `providers` lists must reference existing definitions
+6. Every profile's `agents`, `skills`, `mcpServers`, `providers`, and `sandbox` references must resolve to existing definitions
 7. Profiles with an explicit `base` field must reference an existing base (ADR-0001)
 8. No two bases may share the same `stateDir` override (ADR-0001)
 9. Profile providers must be a subset of their declared base's providers (ADR-0001)

@@ -17,6 +17,20 @@ _: {
     };
   };
 
+  sandboxes = {
+    personal-agent = {
+      uploadProject = true;
+      uploadProfileConfig = true;
+      autoProviders = true;
+    };
+
+    work-agent = {
+      uploadProject = true;
+      uploadProfileConfig = true;
+      autoProviders = false;
+    };
+  };
+
   bases = {
     # personal — personal projects, full agent access, own credentials
     personal = {
@@ -64,6 +78,7 @@ _: {
       skills = [ ]; # empty = all
       mcpServers = [ ]; # empty = all
       tierMapping = { };
+      sandbox = "personal-agent";
     };
 
     # --- work profiles ---
@@ -97,6 +112,7 @@ _: {
         task = null;
         webfetch = "deny";
       };
+      sandbox = "work-agent";
     };
 
     # work/team: same work auth, team-optimized delegation

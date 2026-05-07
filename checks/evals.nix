@@ -470,4 +470,80 @@
       }
       touch $out
     '';
+
+  eval-profile-sandbox-meta =
+    let
+      lib' = pkgs.lib;
+      types = import ../lib/core/types.nix { lib = lib'; };
+      evalModules = import ../lib/core/eval.nix {
+        lib = lib';
+        inherit types;
+      };
+      builders = import ../lib/core/builders.nix {
+        lib = lib';
+        inherit evalModules;
+      };
+
+      meta = builders.mkProfileMeta {
+        inherit pkgs;
+        target = "codex";
+        modules = [
+          {
+            sandboxes.default = {
+              from = "openclaw";
+              providers = [ "github" ];
+              uploadProject = false;
+            };
+            bases.test = { };
+            profiles.test = {
+              base = "test";
+              sandbox = "default";
+            };
+            agents.test-agent = {
+              description = "test";
+              model = "fast";
+              prompt = "test";
+            };
+          }
+        ];
+      };
+      uploadProject = if meta.test.sandbox.uploadProject then "true" else "false";
+    in
+    pkgs.runCommand "eval-profile-sandbox-meta" { } ''
+      [ "${meta.test.sandbox.from}" = "openclaw" ] || { echo "FAIL: missing sandbox source" >&2; exit 1; }
+      [ "${uploadProject}" = "false" ] || { echo "FAIL: uploadProject not preserved" >&2; exit 1; }
+      touch $out
+    '';
+
+  eval-profile-sandbox-reject =
+    let
+      lib' = pkgs.lib;
+      types = import ../lib/core/types.nix { lib = lib'; };
+      evalModules = import ../lib/core/eval.nix {
+        lib = lib';
+        inherit types;
+      };
+
+      evaluated = evalModules {
+        modules = [
+          {
+            bases.test = { };
+            profiles.test = {
+              base = "test";
+              sandbox = "missing";
+            };
+          }
+        ];
+      };
+      result = builtins.tryEval evaluated.config._validated;
+    in
+    pkgs.runCommand "eval-profile-sandbox-reject" { } ''
+      ${
+        if result.success then
+          "echo 'FAIL: nonexistent sandbox should have been rejected' >&2; exit 1"
+        else
+          "# Correctly rejected"
+      }
+      touch $out
+    '';
 }
