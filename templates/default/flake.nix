@@ -23,120 +23,58 @@
         agentPkgs = llm-agents.packages.${system};
         agentsLib = nix-agents.lib.${system};
 
-        # Available presets:
-        #   ${nix-agents}/presets/default.nix   - full team (all agents, skills, MCP servers)
-        #   ${nix-agents}/presets/minimal.nix   - code-monkey + explore only
-        #   ${nix-agents}/presets/security.nix  - minimal + bottleneck + code-red
-        preset = "${nix-agents}/presets/default.nix";
+        modules = [
+          ./agents/my-agent.nix
+          {
+            skills.project-context = {
+              description = "Project-specific context.";
+              content = ''
+                # Project Context
 
-        # Available profiles preset:
-        #   ${nix-agents}/presets/profiles.nix   - base/profile hierarchy (ADR-0001)
-        profiles = "${nix-agents}/presets/profiles.nix";
+                Add your project conventions here.
+              '';
+            };
 
-        myAgentSystem = agentsLib.mkAgentSystem {
-          inherit pkgs;
+            mcpServers.example-api = {
+              type = "remote";
+              transport = "http";
+              url = "https://example.invalid/mcp";
+            };
+
+            bases.default.pathPrefixes = [ "~/src/" ];
+            profiles.default = {
+              base = "default";
+              agents = [ "my-agent" ];
+              skills = [ "project-context" ];
+              mcpServers = [ "example-api" ];
+            };
+          }
+        ];
+
+        opencodeConfig = agentsLib.mkAgentSystem {
+          inherit pkgs modules;
           target = "opencode";
-          modules = [
-            preset
-            profiles
-
-            # Add your own agent definitions
-            ./agents/my-agent.nix
-
-            # Inline overrides
-            {
-              # Override model tier mappings globally
-              # tierMapping.reasoning = "anthropic/claude-opus-4-6";
-              # tierMapping.balanced = "anthropic/claude-sonnet-4-5";
-
-              # Override system-wide permission defaults
-              # defaultPermissions = {
-              #   edit = "allow";
-              #   bash = "ask";
-              # };
-
-              # Override a specific agent's model
-              # agents.code-monkey.model = "anthropic/claude-sonnet-4-5";
-
-              # Add an MCP server
-              mcpServers.my-server = {
-                type = "remote";
-                transport = "http";
-                url = "https://my-api.example.com/mcp";
-              };
-
-              # --- Base/profile example (ADR-0001) ---
-              # Uncomment to define bases with isolated runtime state:
-              #
-              # bases.work = {
-              #   pathPrefixes = [ "~/work/" ];
-              #   providers = [ "work-api-key" ];
-              # };
-              # bases.personal = {
-              #   pathPrefixes = [ "~/src/" "~/projects/" ];
-              #   providers = [ "personal-api-key" ];
-              # };
-              # profiles.work-stable = {
-              #   base = "work";
-              #   agents = [ "code-monkey" "explore" ];
-              #   permissions.webfetch = "deny";
-              # };
-              # profiles.personal-stable = {
-              #   base = "personal";
-              #   # inherits all agents by default
-              # };
-            }
-          ];
-        };
-
-        claudeSystem = agentsLib.mkAgentSystem {
-          inherit pkgs;
-          target = "claude";
-          modules = [
-            preset
-            profiles
-            ./agents/my-agent.nix
-          ];
+          src = ./.;
         };
 
         profileMeta = agentsLib.mkProfileMeta {
-          inherit pkgs;
-          modules = [
-            preset
-            profiles
-            ./agents/my-agent.nix
-          ];
+          inherit pkgs modules;
           target = "opencode";
+          src = ./.;
         };
       in
       {
         packages = {
-          opencode-config = myAgentSystem;
-          claude-config = claudeSystem;
-
+          opencode-config = opencodeConfig;
           opencode = agentsLib.mkWrappedTool {
-            inherit pkgs;
+            inherit pkgs profileMeta;
             target = "opencode";
             tool = agentPkgs.opencode;
-            agentSystem = myAgentSystem;
-            inherit profileMeta;
-          };
-
-          claude = agentsLib.mkWrappedTool {
-            inherit pkgs;
-            target = "claude";
-            tool = agentPkgs.claude-code;
-            agentSystem = claudeSystem;
+            agentSystem = opencodeConfig;
           };
         };
 
-        devShells.default = pkgs.mkShell {
-          name = "my-agent-team";
-          packages = with pkgs; [
-            nixfmt-rfc-style
-            statix
-          ];
-        };
+        checks.config-gen-opencode = opencodeConfig;
       }
     );
 }

@@ -1,10 +1,9 @@
-# Codex generator — produces per-agent markdown, AGENTS.md, and mcp.json.
+# Codex generator — produces per-agent markdown, AGENTS.md, and Codex config fragments.
 # MCP server config and permission handling are minimal compared to OpenCode/Claude generators.
 {
   lib,
   config,
-  src ? null,
-  pkgs ? null,
+  ...
 }:
 let
   agentsMdGenerator = import ./agents-md.nix { inherit lib; };
@@ -71,7 +70,7 @@ let
   ) config.agents;
 
   skills = lib.mapAttrs (
-    name: skill:
+    _name: skill:
     if skill.src == null then skill.content else "See skill source path in generated directory."
   ) config.skills;
 
@@ -88,27 +87,46 @@ let
     name: server: server.type == "remote" || (resolveCommand name server) != [ ]
   ) config.mcpServers;
 
-  mcpEntries = lib.mapAttrsToList (
+  tomlString = builtins.toJSON;
+
+  tomlStringList = values: "[${lib.concatMapStringsSep ", " tomlString values}]";
+
+  renderMcpToml =
     name: server:
-    if server.type == "remote" then
-      {
-        type = "remote";
-        inherit (server) url;
-      }
-    else
-      {
-        type = "local";
-        command = resolveCommand name server;
-      }
-      // lib.optionalAttrs (server.environment != { }) {
-        inherit (server) environment;
-      }
-  ) enabledServers;
+    let
+      command = resolveCommand name server;
+      commandHead = if command == [ ] then null else builtins.head command;
+      commandArgs = if command == [ ] then [ ] else builtins.tail command;
+      envToml = lib.optionalString (server.environment != { }) (
+        "\n[mcp_servers.${name}.env]\n"
+        + lib.concatStringsSep "\n" (
+          lib.mapAttrsToList (envName: value: "${envName} = ${tomlString value}") server.environment
+        )
+        + "\n"
+      );
+    in
+    lib.optionalString server.enabled (
+      if server.type == "remote" then
+        ''
+          [mcp_servers.${name}]
+          url = ${tomlString server.url}
+        ''
+        + envToml
+      else
+        ''
+          [mcp_servers.${name}]
+          command = ${tomlString commandHead}
+          args = ${tomlStringList commandArgs}
+        ''
+        + envToml
+    );
+
+  mcpToml = lib.concatStringsSep "\n" (lib.mapAttrsToList renderMcpToml enabledServers);
 
 in
 {
   agents = agentsOutput;
   inherit skills;
   agentsMd = agentsMdGenerator { inherit (config) agents; };
-  mcpJson = builtins.toJSON mcpEntries;
+  inherit mcpToml;
 }

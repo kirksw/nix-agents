@@ -2,8 +2,7 @@
 {
   lib,
   config,
-  src ? null,
-  pkgs ? null,
+  ...
 }:
 let
   shared = import ./shared.nix { inherit lib; };
@@ -25,10 +24,10 @@ let
     '';
 
   agentRules = lib.mapAttrs (
-    name: agent: renderMdc agent.description (preamble + agent.prompt)
+    _name: agent: renderMdc agent.description (preamble + agent.prompt)
   ) config.agents;
 
-  skillRules = lib.mapAttrs (name: skill: renderMdc skill.description skill.content) config.skills;
+  skillRules = lib.mapAttrs (_name: skill: renderMdc skill.description skill.content) config.skills;
 
   resolveCommand =
     name: server:

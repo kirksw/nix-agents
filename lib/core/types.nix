@@ -368,6 +368,100 @@ let
     };
   };
 
+  sandboxType = types.submodule {
+    options = {
+      from = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = ''
+          OpenShell sandbox source passed to `openshell sandbox create --from`.
+          Null uses OpenShell's default sandbox image.
+        '';
+      };
+      command = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = ''
+          Remote executable to run inside the sandbox. Null uses the target
+          binary name, for example `codex` or `opencode`.
+        '';
+      };
+      keep = mkOption {
+        type = types.bool;
+        default = false;
+        description = "Keep the sandbox alive after the wrapped tool exits.";
+      };
+      gpu = mkOption {
+        type = types.bool;
+        default = false;
+        description = "Request GPU resources for this sandbox.";
+      };
+      providers = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = "OpenShell provider names to attach to the sandbox.";
+      };
+      policy = mkOption {
+        type = types.nullOr types.path;
+        default = null;
+        description = "Optional OpenShell sandbox policy YAML file.";
+      };
+      forward = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = "Local ports to forward before the tool starts.";
+      };
+      uploadProfileConfig = mkOption {
+        type = types.bool;
+        default = true;
+        description = "Upload the generated profile config directory into the sandbox.";
+      };
+      uploadProject = mkOption {
+        type = types.bool;
+        default = true;
+        description = "Upload the current project directory into the sandbox working directory.";
+      };
+      useGitIgnore = mkOption {
+        type = types.bool;
+        default = true;
+        description = "Respect .gitignore when uploading project files.";
+      };
+      autoProviders = mkOption {
+        type = types.nullOr types.bool;
+        default = null;
+        description = ''
+          Controls OpenShell provider auto-creation. Null leaves OpenShell's
+          default behavior unchanged.
+        '';
+      };
+      tty = mkOption {
+        type = types.nullOr types.bool;
+        default = null;
+        description = "Force or disable TTY allocation. Null lets OpenShell auto-detect.";
+      };
+      noBootstrap = mkOption {
+        type = types.bool;
+        default = false;
+        description = "Disable OpenShell gateway auto-bootstrap.";
+      };
+      remote = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = "SSH destination for OpenShell remote bootstrap.";
+      };
+      sshKey = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = "SSH private key path for OpenShell remote bootstrap.";
+      };
+      extraArgs = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = "Additional raw args passed to `openshell sandbox create`.";
+      };
+    };
+  };
+
   baseType = types.submodule {
     options = {
       stateDir = mkOption {
@@ -453,6 +547,11 @@ let
         default = null;
         description = "Profile-local permission defaults.";
       };
+      sandbox = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        description = "Named OpenShell sandbox config to use when launching this profile.";
+      };
     };
   };
 in
@@ -473,6 +572,7 @@ in
     cognitiveStyleType
     humanType
     providerType
+    sandboxType
     baseType
     profileType
     ;
@@ -481,6 +581,7 @@ in
   mcpServers = types.attrsOf mcpServerType;
   hooks = types.listOf hookType;
   providers = types.attrsOf providerType;
+  sandboxes = types.attrsOf sandboxType;
   bases = types.attrsOf baseType;
   profiles = types.attrsOf profileType;
 }
