@@ -267,7 +267,7 @@ let
       codexOutputs = ''
         ${commonOutputs}
         cp ${builtins.toFile "AGENTS.md" generated.agentsMd} "$out/AGENTS.md"
-        cp ${pkgs.writeText "mcp.json" generated.mcpJson} "$out/mcp.json"
+        cp ${pkgs.writeText "mcp.nix.toml" generated.mcpToml} "$out/mcp.nix.toml"
       '';
 
       piOutputs = ''
@@ -731,6 +731,47 @@ in
           done
         fi
       }
+      _link_base_settings_except_config_toml() {
+        local _settings_dir="$1"
+        local _profile_dir="$2"
+        if [ -d "$_settings_dir" ]; then
+          # Source env file first so exports are available before tool launch
+          if [ -f "$_settings_dir/env" ]; then
+            . "$_settings_dir/env"
+          fi
+          for _f in "$_settings_dir"/*; do
+            [ -f "$_f" ] || continue
+            _name="''${_f##*/}"
+            # env is sourced, not symlinked. config.toml is merged with generated
+            # Codex MCP config rather than symlinked directly.
+            [ "$_name" = "env" ] && continue
+            [ "$_name" = "config.toml" ] && continue
+            ln -sfn "$_f" "$_profile_dir/$_name" 2>/dev/null || true
+          done
+        fi
+      }
+      _merge_codex_config() {
+        local user_config="$1"
+        local nix_mcp_config="$2"
+        local target_config="$3"
+
+        rm -f "$target_config"
+
+        if [ -f "$user_config" ]; then
+          cat "$user_config" >> "$target_config"
+        fi
+
+        if [ -s "$nix_mcp_config" ]; then
+          if [ -s "$target_config" ]; then
+            printf '\n' >> "$target_config"
+          fi
+          cat "$nix_mcp_config" >> "$target_config"
+        fi
+
+        if [ -e "$target_config" ]; then
+          chmod u+w "$target_config"
+        fi
+      }
       _NAX_SANDBOX_DEFAULT_COMMAND="${target}"
       _nax_exec_tool() {
         local _local_tool="$1"
@@ -822,8 +863,9 @@ in
         _sync_link_dir "${nixAgentsConfig}/agents" "$_nix_agents_dir/agents"
         _sync_link_dir "${nixAgentsConfig}/skills" "$_nix_agents_dir/skills"
         _sync_link_file "${nixAgentsConfig}/AGENTS.md" "$_nix_agents_dir/AGENTS.md"
-        _sync_link_file "${nixAgentsConfig}/mcp.json" "$_nix_agents_dir/mcp.json"
-        _link_base_settings "$_NAX_BASE_CONFIG_HOME/nix-agents/codex/bases/$NAX_BASE/settings" "$_nix_agents_dir"
+        _sync_link_file "${nixAgentsConfig}/mcp.nix.toml" "$_nix_agents_dir/mcp.nix.toml"
+        _link_base_settings_except_config_toml "$_NAX_BASE_CONFIG_HOME/nix-agents/codex/bases/$NAX_BASE/settings" "$_nix_agents_dir"
+        _merge_codex_config "$_NAX_BASE_CONFIG_HOME/nix-agents/codex/bases/$NAX_BASE/settings/config.toml" "$_nix_agents_dir/mcp.nix.toml" "$_nix_agents_dir/config.toml"
         export CODEX_HOME="$_nix_agents_dir"
         _NAX_SANDBOX_PROFILE_CONFIG_DIR="$_nix_agents_dir"
         _NAX_SANDBOX_REMOTE_ENV+=("CODEX_HOME=$_NAX_SANDBOX_REMOTE_CONFIG_REF")

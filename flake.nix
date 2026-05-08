@@ -269,8 +269,8 @@
                 target = "AGENTS.md";
               }
               {
-                source = "mcp.json";
-                target = "mcp.json";
+                source = "mcp.nix.toml";
+                target = "mcp.nix.toml";
               }
             ];
           }}
@@ -525,12 +525,10 @@
           schema-compat-codex =
             pkgs.runCommand "schema-compat-codex"
               {
-                nativeBuildInputs = [ pkgs.check-jsonschema ];
+                nativeBuildInputs = [ pkgs.python3 ];
               }
               ''
-                check-jsonschema \
-                  --schemafile ${./lib/schemas/codex-mcp.json} \
-                  ${codexConfig}/mcp.json
+                python -c 'import pathlib, tomllib; data = tomllib.loads(pathlib.Path("${codexConfig}/mcp.nix.toml").read_text()); assert isinstance(data.get("mcp_servers", {}), dict)'
                 touch $out
               '';
 

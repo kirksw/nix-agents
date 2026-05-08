@@ -124,10 +124,10 @@
     touch $out
   '';
 
-  # codex mcp.json must exist and be valid JSON
-  eval-codex-mcp-json = pkgs.runCommand "eval-codex-mcp-json" { nativeBuildInputs = [ pkgs.jq ]; } ''
-    jq -e '. | type == "array"' ${codexConfig}/mcp.json > /dev/null \
-      || { echo "FAIL: codex mcp.json is not a JSON array" >&2; exit 1; }
+  # codex MCP config must exist and be valid TOML for config.toml merging
+  eval-codex-mcp-toml = pkgs.runCommand "eval-codex-mcp-toml" { nativeBuildInputs = [ pkgs.python3 ]; } ''
+    python -c 'import pathlib, tomllib; data = tomllib.loads(pathlib.Path("${codexConfig}/mcp.nix.toml").read_text()); assert isinstance(data.get("mcp_servers", {}), dict)' \
+      || { echo "FAIL: codex mcp.nix.toml is not valid MCP TOML" >&2; exit 1; }
     touch $out
   '';
 
