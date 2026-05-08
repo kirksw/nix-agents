@@ -187,13 +187,6 @@ let
         cp ${builtins.toFile "agent-${name}.md" content} "$out/agents/${name}.md"
       '';
 
-      skillContent =
-        name: skill:
-        if skill.src != null then
-          builtins.unsafeDiscardStringContext (builtins.readFile (skill.src + "/SKILL.md"))
-        else
-          skill.content;
-
       # Build full SKILL.md content: prepend YAML frontmatter with name and description
       # when skill is defined inline (not via src). This ensures Pi can discover
       # and load the skill.
@@ -267,7 +260,7 @@ let
       codexOutputs = ''
         ${commonOutputs}
         cp ${builtins.toFile "AGENTS.md" generated.agentsMd} "$out/AGENTS.md"
-        cp ${pkgs.writeText "mcp.json" generated.mcpJson} "$out/mcp.json"
+        cp ${pkgs.writeText "mcp.nix.toml" generated.mcpToml} "$out/mcp.nix.toml"
       '';
 
       piOutputs = ''
@@ -383,6 +376,7 @@ let
           baseCfg = evaluated.config.bases.${(resolveBaseProfile evaluated.config name).base} or null;
         in
         if baseCfg != null && baseCfg.git != null then baseCfg.git else null;
+      sandbox = if profile.sandbox != null then evaluated.config.sandboxes.${profile.sandbox} else null;
       inherit ((resolveBaseProfile evaluated.config name)) base;
     }) evaluated.config.profiles;
 
@@ -441,6 +435,7 @@ in
       target,
       tool,
       agentSystem,
+      openshell ? pkgs.openshell,
       # Optional: attrset of profileName -> { storePath: path; pathPrefixes: listOf str; providers: list; }
       # Built with mkProfileMeta. When non-empty the wrapper selects a profile at
       # runtime based on $PWD or a .nix-agents-profile override file, and resolves
@@ -457,6 +452,7 @@ in
       hasProfiles = profileMeta != { };
       forcedProfile = if profile != null then profile else "";
       needsProfileSelection = hasProfiles || profile != null;
+      boolFlag = value: if value then "1" else "0";
 
       # Sort all (profile, prefix) pairs by descending prefix length so that
       # the longest (most-specific) prefix matches first in the shell case.
@@ -584,6 +580,67 @@ in
           ${arms}  esac
         '';
 
+      sandboxBlock =
+        let
+          appendArg = arg: ''
+            _NAX_SANDBOX_ARGS+=(${lib.escapeShellArg arg})
+          '';
+          appendArgValue = flag: value: ''
+            _NAX_SANDBOX_ARGS+=(${lib.escapeShellArg flag} ${lib.escapeShellArg value})
+          '';
+          appendStringList = flag: values: lib.concatMapStrings (value: appendArgValue flag value) values;
+          mkSandboxArm =
+            name: meta:
+            let
+              inherit (meta) sandbox;
+            in
+            lib.optionalString (sandbox != null) ''
+              ${name})
+                _NAX_SANDBOX_ENABLED=1
+                _NAX_SANDBOX_UPLOAD_PROFILE_CONFIG=${boolFlag sandbox.uploadProfileConfig}
+                _NAX_SANDBOX_UPLOAD_PROJECT=${boolFlag sandbox.uploadProject}
+                _NAX_SANDBOX_USE_GITIGNORE=${boolFlag sandbox.useGitIgnore}
+                ${lib.optionalString (sandbox.command != null) ''
+                  _NAX_SANDBOX_COMMAND=${lib.escapeShellArg sandbox.command}
+                ''}
+                ${lib.optionalString (sandbox.from != null) (appendArgValue "--from" sandbox.from)}
+                ${lib.optionalString (!sandbox.keep) (appendArg "--no-keep")}
+                ${lib.optionalString sandbox.gpu (appendArg "--gpu")}
+                ${appendStringList "--provider" sandbox.providers}
+                ${lib.optionalString (sandbox.policy != null) (appendArgValue "--policy" "${sandbox.policy}")}
+                ${appendStringList "--forward" sandbox.forward}
+                ${lib.optionalString (sandbox.autoProviders != null) (
+                  if sandbox.autoProviders then appendArg "--auto-providers" else appendArg "--no-auto-providers"
+                )}
+                ${lib.optionalString (sandbox.tty != null) (
+                  if sandbox.tty then appendArg "--tty" else appendArg "--no-tty"
+                )}
+                ${lib.optionalString sandbox.noBootstrap (appendArg "--no-bootstrap")}
+                ${lib.optionalString (sandbox.remote != null) (appendArgValue "--remote" sandbox.remote)}
+                ${lib.optionalString (sandbox.sshKey != null) (appendArgValue "--ssh-key" sandbox.sshKey)}
+                ${lib.concatMapStrings appendArg sandbox.extraArgs}
+                ;;
+            '';
+          arms = lib.concatStrings (lib.mapAttrsToList mkSandboxArm profileMeta);
+        in
+        lib.optionalString (hasProfiles && arms != "") ''
+          _NAX_SANDBOX_ENABLED=0
+          _NAX_SANDBOX_COMMAND=""
+          _NAX_SANDBOX_PROFILE_CONFIG_DIR=""
+          _NAX_SANDBOX_REMOTE_CONFIG_DIR=".nix-agents-profile-config"
+          _NAX_SANDBOX_REMOTE_CONFIG_REF="../.nix-agents-profile-config"
+          _NAX_SANDBOX_REMOTE_DATA_DIR=".nix-agents-data"
+          _NAX_SANDBOX_REMOTE_DATA_REF="../.nix-agents-data"
+          _NAX_SANDBOX_REMOTE_PROJECT_DIR=".nix-agents-project"
+          _NAX_SANDBOX_UPLOAD_PROFILE_CONFIG=1
+          _NAX_SANDBOX_UPLOAD_PROJECT=1
+          _NAX_SANDBOX_USE_GITIGNORE=1
+          _NAX_SANDBOX_ARGS=()
+          _NAX_SANDBOX_REMOTE_ENV=()
+          case "''${_NAX_PROFILE:-}" in
+          ${arms}  esac
+        '';
+
       # The config store path used throughout the rest of the wrapper.
       # Statically embedded when there are no profiles, runtime variable when there are.
       nixAgentsConfig = if hasProfiles then "$_NAX_CONFIG" else "${agentSystem}";
@@ -592,6 +649,7 @@ in
       ${profileBlock}
       ${credentialBlock}
       ${gitIdentityBlock}
+      ${sandboxBlock}
       _NAX_HOOKS="${nixAgentsConfig}/hook-manifest"
       _NAX_BASE_CONFIG_HOME="''${XDG_CONFIG_HOME:-$HOME/.config}"
       _NAX_BASE_DATA_HOME="''${XDG_DATA_HOME:-$HOME/.local/share}"
@@ -666,6 +724,84 @@ in
           done
         fi
       }
+      _link_base_settings_except_config_toml() {
+        local _settings_dir="$1"
+        local _profile_dir="$2"
+        if [ -d "$_settings_dir" ]; then
+          # Source env file first so exports are available before tool launch
+          if [ -f "$_settings_dir/env" ]; then
+            . "$_settings_dir/env"
+          fi
+          for _f in "$_settings_dir"/*; do
+            [ -f "$_f" ] || continue
+            _name="''${_f##*/}"
+            # env is sourced, not symlinked. config.toml is merged with generated
+            # Codex MCP config rather than symlinked directly.
+            [ "$_name" = "env" ] && continue
+            [ "$_name" = "config.toml" ] && continue
+            ln -sfn "$_f" "$_profile_dir/$_name" 2>/dev/null || true
+          done
+        fi
+      }
+      _merge_codex_config() {
+        local user_config="$1"
+        local nix_mcp_config="$2"
+        local target_config="$3"
+
+        rm -f "$target_config"
+
+        if [ -f "$user_config" ]; then
+          cat "$user_config" >> "$target_config"
+        fi
+
+        if [ -s "$nix_mcp_config" ]; then
+          if [ -s "$target_config" ]; then
+            printf '\n' >> "$target_config"
+          fi
+          cat "$nix_mcp_config" >> "$target_config"
+        fi
+
+        if [ -e "$target_config" ]; then
+          chmod u+w "$target_config"
+        fi
+      }
+      _NAX_SANDBOX_DEFAULT_COMMAND="${target}"
+      _nax_exec_tool() {
+        local _local_tool="$1"
+        shift
+        if [ "''${_NAX_SANDBOX_ENABLED:-0}" = "1" ]; then
+          local _nax_stage
+          _nax_stage="$(mktemp -d "''${TMPDIR:-/tmp}/nix-agents-openshell.XXXXXX")"
+          local -a _nax_args
+          local -a _nax_env
+          _nax_args=(sandbox create)
+          _nax_args+=("''${_NAX_SANDBOX_ARGS[@]}")
+          mkdir -p "$_nax_stage/$_NAX_SANDBOX_REMOTE_PROJECT_DIR"
+          if [ "''${_NAX_SANDBOX_UPLOAD_PROFILE_CONFIG:-1}" = "1" ] && [ -n "''${_NAX_SANDBOX_PROFILE_CONFIG_DIR:-}" ]; then
+            mkdir -p "$_nax_stage/$_NAX_SANDBOX_REMOTE_CONFIG_DIR"
+            ${pkgs.rsync}/bin/rsync -a "$_NAX_SANDBOX_PROFILE_CONFIG_DIR"/ "$_nax_stage/$_NAX_SANDBOX_REMOTE_CONFIG_DIR"/
+          fi
+          if [ "''${_NAX_SANDBOX_UPLOAD_PROJECT:-1}" = "1" ]; then
+            if [ "''${_NAX_SANDBOX_USE_GITIGNORE:-1}" = "1" ]; then
+              ${pkgs.rsync}/bin/rsync -a --exclude '.git/' --filter=':- .gitignore' "$PWD"/ "$_nax_stage/$_NAX_SANDBOX_REMOTE_PROJECT_DIR"/
+            else
+              ${pkgs.rsync}/bin/rsync -a --exclude '.git/' "$PWD"/ "$_nax_stage/$_NAX_SANDBOX_REMOTE_PROJECT_DIR"/
+            fi
+          fi
+          _nax_args+=(--upload "$_nax_stage")
+          _nax_env=(
+            "NAX_PROFILE=$NAX_PROFILE"
+            "NAX_BASE=$NAX_BASE"
+            "NAX_SKILL_VERSIONS=$NAX_SKILL_VERSIONS"
+          )
+          _nax_env+=("''${_NAX_SANDBOX_REMOTE_ENV[@]}")
+          "${openshell}/bin/openshell" "''${_nax_args[@]}" -- sh -lc 'cd "$1" && shift && exec env "$@"' sh "$_NAX_SANDBOX_REMOTE_PROJECT_DIR" "''${_nax_env[@]}" "''${_NAX_SANDBOX_COMMAND:-$_NAX_SANDBOX_DEFAULT_COMMAND}" "$@"
+          local _nax_status=$?
+          rm -rf "$_nax_stage"
+          exit "$_nax_status"
+        fi
+        exec "$_local_tool" "$@"
+      }
 
       if [ "${target}" = "opencode" ]; then
         mkdir -p "$_NAX_TOOL_CONFIG_DIR"
@@ -682,6 +818,14 @@ in
         export OPENCODE_CONFIG="$_NAX_TOOL_CONFIG_DIR/opencode.json"
         export OPENCODE_CONFIG_DIR="$_NAX_TOOL_CONFIG_DIR"
         export OPENCODE_CONFIG_CONTENT='{"autoupdate":false}'
+        _NAX_SANDBOX_PROFILE_CONFIG_DIR="$_NAX_TOOL_CONFIG_DIR"
+        _NAX_SANDBOX_REMOTE_ENV+=(
+          "XDG_CONFIG_HOME=$_NAX_SANDBOX_REMOTE_CONFIG_REF"
+          "XDG_DATA_HOME=$_NAX_SANDBOX_REMOTE_DATA_REF"
+          "OPENCODE_CONFIG=$_NAX_SANDBOX_REMOTE_CONFIG_REF/opencode.json"
+          "OPENCODE_CONFIG_DIR=$_NAX_SANDBOX_REMOTE_CONFIG_REF"
+          "OPENCODE_CONFIG_CONTENT=$OPENCODE_CONFIG_CONTENT"
+        )
       fi
 
       if [ "${target}" = "claude" ]; then
@@ -694,9 +838,16 @@ in
         _sync_link_file "${nixAgentsConfig}/.mcp.json" "$_nix_agents_dir/.mcp.json"
         _link_base_settings "$_NAX_BASE_CONFIG_HOME/nix-agents/claude/bases/$NAX_BASE/settings" "$_nix_agents_dir"
         export CLAUDE_CONFIG_DIR="$_nix_agents_dir"
-        set -- --settings "$_nix_agents_dir/settings.json" "$@"
-        [ -f "$_nix_agents_dir/.mcp.json" ] && set -- --mcp-config "$_nix_agents_dir/.mcp.json" "$@"
-        exec "${toolBin}" "$@"
+        _NAX_SANDBOX_PROFILE_CONFIG_DIR="$_nix_agents_dir"
+        _NAX_SANDBOX_REMOTE_ENV+=("CLAUDE_CONFIG_DIR=$_NAX_SANDBOX_REMOTE_CONFIG_REF")
+        if [ "''${_NAX_SANDBOX_ENABLED:-0}" = "1" ]; then
+          set -- --settings "$_NAX_SANDBOX_REMOTE_CONFIG_REF/settings.json" "$@"
+          [ -f "$_nix_agents_dir/.mcp.json" ] && set -- --mcp-config "$_NAX_SANDBOX_REMOTE_CONFIG_REF/.mcp.json" "$@"
+        else
+          set -- --settings "$_nix_agents_dir/settings.json" "$@"
+          [ -f "$_nix_agents_dir/.mcp.json" ] && set -- --mcp-config "$_nix_agents_dir/.mcp.json" "$@"
+        fi
+        _nax_exec_tool "${toolBin}" "$@"
       fi
 
       if [ "${target}" = "codex" ]; then
@@ -705,10 +856,13 @@ in
         _sync_link_dir "${nixAgentsConfig}/agents" "$_nix_agents_dir/agents"
         _sync_link_dir "${nixAgentsConfig}/skills" "$_nix_agents_dir/skills"
         _sync_link_file "${nixAgentsConfig}/AGENTS.md" "$_nix_agents_dir/AGENTS.md"
-        _sync_link_file "${nixAgentsConfig}/mcp.json" "$_nix_agents_dir/mcp.json"
-        _link_base_settings "$_NAX_BASE_CONFIG_HOME/nix-agents/codex/bases/$NAX_BASE/settings" "$_nix_agents_dir"
+        _sync_link_file "${nixAgentsConfig}/mcp.nix.toml" "$_nix_agents_dir/mcp.nix.toml"
+        _link_base_settings_except_config_toml "$_NAX_BASE_CONFIG_HOME/nix-agents/codex/bases/$NAX_BASE/settings" "$_nix_agents_dir"
+        _merge_codex_config "$_NAX_BASE_CONFIG_HOME/nix-agents/codex/bases/$NAX_BASE/settings/config.toml" "$_nix_agents_dir/mcp.nix.toml" "$_nix_agents_dir/config.toml"
         export CODEX_HOME="$_nix_agents_dir"
-        exec "${toolBin}" "$@"
+        _NAX_SANDBOX_PROFILE_CONFIG_DIR="$_nix_agents_dir"
+        _NAX_SANDBOX_REMOTE_ENV+=("CODEX_HOME=$_NAX_SANDBOX_REMOTE_CONFIG_REF")
+        _nax_exec_tool "${toolBin}" "$@"
       fi
 
       if [ "${target}" = "pi" ]; then
@@ -739,9 +893,11 @@ in
         _link_base_settings "$_NAX_BASE_CONFIG_HOME/nix-agents/pi/bases/$NAX_BASE/settings" "$_pi_profile_dir"
 
         export PI_CODING_AGENT_DIR="$_pi_profile_dir"
-        exec "${toolBin}" "$@"
+        _NAX_SANDBOX_PROFILE_CONFIG_DIR="$_pi_profile_dir"
+        _NAX_SANDBOX_REMOTE_ENV+=("PI_CODING_AGENT_DIR=$_NAX_SANDBOX_REMOTE_CONFIG_REF")
+        _nax_exec_tool "${toolBin}" "$@"
       fi
 
-      exec "${toolBin}" "$@"
+      _nax_exec_tool "${toolBin}" "$@"
     '';
 }

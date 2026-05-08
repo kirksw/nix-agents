@@ -11,7 +11,7 @@
       Customize this prompt with your domain knowledge, constraints, and preferences.
     '';
 
-    delegatesTo = [ "code-monkey" ];
+    delegatesTo = [ ];
 
     permissions = {
       edit = "allow";
@@ -21,17 +21,12 @@
           "git *" = "allow";
         };
       };
-      task = {
-        default = "deny";
-        rules = {
-          "code-monkey" = "allow";
-        };
-      };
+      task = "deny";
       webfetch = "ask";
     };
 
-    skills = [ ];
-    mcpServers = [ ];
+    skills = [ "project-context" ];
+    mcpServers = [ "example-api" ];
 
     orchestration.patterns = {
       "Custom workflow" = ''

@@ -1,8 +1,8 @@
 {
   lib,
   config,
-  src ? null,
   pkgs ? null,
+  ...
 }:
 let
   agentsMdGenerator = import ./agents-md.nix { inherit lib; };
@@ -114,7 +114,7 @@ let
   ) config.agents;
 
   skillSkel = lib.mapAttrs (
-    name: skill:
+    _name: skill:
     if skill.src == null then skill.content else "See skill source path in generated directory."
   ) config.skills;
 
