@@ -444,7 +444,20 @@ in
       # Optional: force a specific profile name for runtime namespacing and config
       # selection. When set, cwd-based profile detection is skipped.
       profile ? null,
+      # Controls whether the wrapper copies generated assets from the embedded
+      # nix store config into the mutable profile directory on launch.
+      #   always    — current behavior; replace generated assets every launch.
+      #   bootstrap — copy only missing generated assets, preserving sync output.
+      #   never     — do not copy generated assets from the wrapper.
+      syncMode ? "always",
     }:
+    assert
+      builtins.elem syncMode [
+        "always"
+        "bootstrap"
+        "never"
+      ]
+      || throw "mkWrappedTool: syncMode must be one of: always, bootstrap, never";
     let
       toolBin = if target == "claude" then "${tool}/bin/claude" else "${tool}/bin/${target}";
       binName = target;
@@ -650,13 +663,20 @@ in
       ${credentialBlock}
       ${gitIdentityBlock}
       ${sandboxBlock}
-      _NAX_HOOKS="${nixAgentsConfig}/hook-manifest"
       _NAX_BASE_CONFIG_HOME="''${XDG_CONFIG_HOME:-$HOME/.config}"
       _NAX_BASE_DATA_HOME="''${XDG_DATA_HOME:-$HOME/.local/share}"
       export NAX_PROFILE="''${_NAX_PROFILE:-default}"
       export NAX_BASE="$_NAX_BASE"
       _NAX_TOOL_CONFIG_DIR="$_NAX_BASE_CONFIG_HOME/nix-agents/${target}/bases/$NAX_BASE/profiles/$NAX_PROFILE"
-      export NAX_SKILL_VERSIONS="${nixAgentsConfig}/skill-versions.json"
+      _NAX_SYNC_MODE=${lib.escapeShellArg syncMode}
+      _NAX_HOOKS="$_NAX_TOOL_CONFIG_DIR/hook-manifest"
+      if [ ! -f "$_NAX_HOOKS" ]; then
+        _NAX_HOOKS="${nixAgentsConfig}/hook-manifest"
+      fi
+      export NAX_SKILL_VERSIONS="$_NAX_TOOL_CONFIG_DIR/skill-versions.json"
+      if [ ! -f "$NAX_SKILL_VERSIONS" ]; then
+        export NAX_SKILL_VERSIONS="${nixAgentsConfig}/skill-versions.json"
+      fi
       export NAX_WRAPPER_PID=$$
       _run_hook() {
         local event="$1"
@@ -671,9 +691,19 @@ in
       }
       trap '_run_hook session-end "{}"' EXIT
       _run_hook session-start "{}"
+      _nax_should_sync_path() {
+        local target_path="$1"
+        case "$_NAX_SYNC_MODE" in
+          always) return 0 ;;
+          never) return 1 ;;
+          bootstrap) [ ! -e "$target_path" ] ;;
+          *) return 1 ;;
+        esac
+      }
       _sync_link_dir() {
         local source_dir="$1"
         local target_path="$2"
+        _nax_should_sync_path "$target_path" || return 0
         if [ -e "$target_path" ]; then
           chmod -R u+w "$target_path" 2>/dev/null || true
         fi
@@ -687,6 +717,7 @@ in
       _sync_link_file() {
         local source_file="$1"
         local target_path="$2"
+        _nax_should_sync_path "$target_path" || return 0
         if [ -e "$target_path" ]; then
           chmod u+w "$target_path" 2>/dev/null || true
         fi
@@ -695,6 +726,11 @@ in
           cp "$source_file" "$target_path"
           chmod u+w "$target_path"
         fi
+      }
+      _sync_common_profile_assets() {
+        local target_dir="$1"
+        _sync_link_file "${nixAgentsConfig}/hook-manifest" "$target_dir/hook-manifest"
+        _sync_link_file "${nixAgentsConfig}/skill-versions.json" "$target_dir/skill-versions.json"
       }
 
       # Symlink persisted base-scoped settings files into the profile directory
@@ -805,6 +841,7 @@ in
 
       if [ "${target}" = "opencode" ]; then
         mkdir -p "$_NAX_TOOL_CONFIG_DIR"
+        _sync_common_profile_assets "$_NAX_TOOL_CONFIG_DIR"
         _sync_link_dir "${nixAgentsConfig}/agents" "$_NAX_TOOL_CONFIG_DIR/agents"
         _sync_link_dir "${nixAgentsConfig}/skills" "$_NAX_TOOL_CONFIG_DIR/skills"
         _sync_link_file "${nixAgentsConfig}/AGENTS.md" "$_NAX_TOOL_CONFIG_DIR/AGENTS.md"
@@ -831,6 +868,7 @@ in
       if [ "${target}" = "claude" ]; then
         _nix_agents_dir="$_NAX_BASE_CONFIG_HOME/nix-agents/claude/bases/$NAX_BASE/profiles/$NAX_PROFILE"
         mkdir -p "$_nix_agents_dir"
+        _sync_common_profile_assets "$_nix_agents_dir"
         _sync_link_dir "${nixAgentsConfig}/agents" "$_nix_agents_dir/agents"
         _sync_link_dir "${nixAgentsConfig}/skills" "$_nix_agents_dir/skills"
         _sync_link_file "${nixAgentsConfig}/CLAUDE.md" "$_nix_agents_dir/CLAUDE.md"
@@ -853,6 +891,7 @@ in
       if [ "${target}" = "codex" ]; then
         _nix_agents_dir="$_NAX_BASE_CONFIG_HOME/nix-agents/codex/bases/$NAX_BASE/profiles/$NAX_PROFILE"
         mkdir -p "$_nix_agents_dir"
+        _sync_common_profile_assets "$_nix_agents_dir"
         _sync_link_dir "${nixAgentsConfig}/agents" "$_nix_agents_dir/agents"
         _sync_link_dir "${nixAgentsConfig}/skills" "$_nix_agents_dir/skills"
         _sync_link_file "${nixAgentsConfig}/AGENTS.md" "$_nix_agents_dir/AGENTS.md"
@@ -872,6 +911,7 @@ in
         mkdir -p "$_pi_profile_dir" "$_pi_state_dir"
 
         # Profile-specific content from nix store
+        _sync_common_profile_assets "$_pi_profile_dir"
         _sync_link_dir "${nixAgentsConfig}/agents" "$_pi_profile_dir/agents"
         _sync_link_dir "${nixAgentsConfig}/skills" "$_pi_profile_dir/skills"
         _sync_link_file "${nixAgentsConfig}/AGENTS.md" "$_pi_profile_dir/AGENTS.md"
