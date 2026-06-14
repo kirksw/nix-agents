@@ -72,7 +72,7 @@ The manifest renders:
    under an "other" group with their literal model id.
 3. A short **usage** section explaining the three supported patterns (sparring, backup
    failover, peer review) against same-tier groupings.
-4. A note disambiguating **model tier** (`fast/balanced/powerful/reasoning`) from
+4. A note disambiguating **model tier** (`ultrafast/fast/balanced/powerful/reasoning`) from
    **organizational tier** (`employee/manager/orchestrator`).
 
 Markers wrap the section for clarity:
