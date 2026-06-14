@@ -714,10 +714,35 @@ in
           chmod -R u+w "$target_path"
         fi
       }
+      _sync_link_dir_force() {
+        local source_dir="$1"
+        local target_path="$2"
+        if [ -e "$target_path" ]; then
+          chmod -R u+w "$target_path" 2>/dev/null || true
+        fi
+        rm -rf "$target_path"
+        if [ -d "$source_dir" ]; then
+          mkdir -p "$target_path"
+          cp -R "$source_dir"/. "$target_path"/
+          chmod -R u+w "$target_path"
+        fi
+      }
       _sync_link_file() {
         local source_file="$1"
         local target_path="$2"
         _nax_should_sync_path "$target_path" || return 0
+        if [ -e "$target_path" ]; then
+          chmod u+w "$target_path" 2>/dev/null || true
+        fi
+        rm -rf "$target_path"
+        if [ -f "$source_file" ]; then
+          cp "$source_file" "$target_path"
+          chmod u+w "$target_path"
+        fi
+      }
+      _sync_link_file_force() {
+        local source_file="$1"
+        local target_path="$2"
         if [ -e "$target_path" ]; then
           chmod u+w "$target_path" 2>/dev/null || true
         fi
@@ -928,7 +953,7 @@ in
         if [ ! -e "$_pi_profile_dir/settings.json" ]; then
           ln -sfn "$_pi_state_dir/settings.json" "$_pi_profile_dir/settings.json" 2>/dev/null || true
         fi
-        _sync_link_dir "$_pi_state_dir/sessions" "$_pi_profile_dir/sessions"
+        _sync_link_dir_force "$_pi_state_dir/sessions" "$_pi_profile_dir/sessions"
 
         _link_base_settings "$_NAX_BASE_CONFIG_HOME/nix-agents/pi/bases/$NAX_BASE/settings" "$_pi_profile_dir"
 
