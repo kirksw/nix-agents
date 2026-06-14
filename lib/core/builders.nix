@@ -669,28 +669,7 @@ in
       export NAX_BASE="$_NAX_BASE"
       _NAX_TOOL_CONFIG_DIR="$_NAX_BASE_CONFIG_HOME/nix-agents/${target}/bases/$NAX_BASE/profiles/$NAX_PROFILE"
       _NAX_SYNC_MODE=${lib.escapeShellArg syncMode}
-      _NAX_HOOKS="$_NAX_TOOL_CONFIG_DIR/hook-manifest"
-      if [ ! -f "$_NAX_HOOKS" ]; then
-        _NAX_HOOKS="${nixAgentsConfig}/hook-manifest"
-      fi
-      export NAX_SKILL_VERSIONS="$_NAX_TOOL_CONFIG_DIR/skill-versions.json"
-      if [ ! -f "$NAX_SKILL_VERSIONS" ]; then
-        export NAX_SKILL_VERSIONS="${nixAgentsConfig}/skill-versions.json"
-      fi
-      export NAX_WRAPPER_PID=$$
-      _run_hook() {
-        local event="$1"
-        local json="''${2:-{}}"
-        if [ -f "$_NAX_HOOKS" ]; then
-          while IFS=: read -r ev script; do
-            if [ "$ev" = "$event" ]; then
-              printf '%s' "$json" | "$script" || true
-            fi
-          done < "$_NAX_HOOKS"
-        fi
-      }
-      trap '_run_hook session-end "{}"' EXIT
-      _run_hook session-start "{}"
+      mkdir -p "$_NAX_TOOL_CONFIG_DIR"
       _nax_should_sync_path() {
         local target_path="$1"
         case "$_NAX_SYNC_MODE" in
@@ -757,6 +736,30 @@ in
         _sync_link_file "${nixAgentsConfig}/hook-manifest" "$target_dir/hook-manifest"
         _sync_link_file "${nixAgentsConfig}/skill-versions.json" "$target_dir/skill-versions.json"
       }
+      _sync_common_profile_assets "$_NAX_TOOL_CONFIG_DIR"
+
+      _NAX_HOOKS="$_NAX_TOOL_CONFIG_DIR/hook-manifest"
+      if [ ! -f "$_NAX_HOOKS" ]; then
+        _NAX_HOOKS="${nixAgentsConfig}/hook-manifest"
+      fi
+      export NAX_SKILL_VERSIONS="$_NAX_TOOL_CONFIG_DIR/skill-versions.json"
+      if [ ! -f "$NAX_SKILL_VERSIONS" ]; then
+        export NAX_SKILL_VERSIONS="${nixAgentsConfig}/skill-versions.json"
+      fi
+      export NAX_WRAPPER_PID=$$
+      _run_hook() {
+        local event="$1"
+        local json="''${2:-{}}"
+        if [ -f "$_NAX_HOOKS" ]; then
+          while IFS=: read -r ev script; do
+            if [ "$ev" = "$event" ]; then
+              printf '%s' "$json" | "$script" || true
+            fi
+          done < "$_NAX_HOOKS"
+        fi
+      }
+      trap '_run_hook session-end "{}"' EXIT
+      _run_hook session-start "{}"
 
       # Symlink persisted base-scoped settings files into the profile directory
       # and source environment overrides.
@@ -866,7 +869,6 @@ in
 
       if [ "${target}" = "opencode" ]; then
         mkdir -p "$_NAX_TOOL_CONFIG_DIR"
-        _sync_common_profile_assets "$_NAX_TOOL_CONFIG_DIR"
         _sync_link_dir "${nixAgentsConfig}/agents" "$_NAX_TOOL_CONFIG_DIR/agents"
         _sync_link_dir "${nixAgentsConfig}/skills" "$_NAX_TOOL_CONFIG_DIR/skills"
         _sync_link_file "${nixAgentsConfig}/AGENTS.md" "$_NAX_TOOL_CONFIG_DIR/AGENTS.md"
@@ -893,7 +895,6 @@ in
       if [ "${target}" = "claude" ]; then
         _nix_agents_dir="$_NAX_BASE_CONFIG_HOME/nix-agents/claude/bases/$NAX_BASE/profiles/$NAX_PROFILE"
         mkdir -p "$_nix_agents_dir"
-        _sync_common_profile_assets "$_nix_agents_dir"
         _sync_link_dir "${nixAgentsConfig}/agents" "$_nix_agents_dir/agents"
         _sync_link_dir "${nixAgentsConfig}/skills" "$_nix_agents_dir/skills"
         _sync_link_file "${nixAgentsConfig}/CLAUDE.md" "$_nix_agents_dir/CLAUDE.md"
@@ -916,7 +917,6 @@ in
       if [ "${target}" = "codex" ]; then
         _nix_agents_dir="$_NAX_BASE_CONFIG_HOME/nix-agents/codex/bases/$NAX_BASE/profiles/$NAX_PROFILE"
         mkdir -p "$_nix_agents_dir"
-        _sync_common_profile_assets "$_nix_agents_dir"
         _sync_link_dir "${nixAgentsConfig}/agents" "$_nix_agents_dir/agents"
         _sync_link_dir "${nixAgentsConfig}/skills" "$_nix_agents_dir/skills"
         _sync_link_file "${nixAgentsConfig}/AGENTS.md" "$_nix_agents_dir/AGENTS.md"
@@ -936,7 +936,6 @@ in
         mkdir -p "$_pi_profile_dir" "$_pi_state_dir"
 
         # Profile-specific content from nix store
-        _sync_common_profile_assets "$_pi_profile_dir"
         _sync_link_dir "${nixAgentsConfig}/agents" "$_pi_profile_dir/agents"
         _sync_link_dir "${nixAgentsConfig}/skills" "$_pi_profile_dir/skills"
         _sync_link_file "${nixAgentsConfig}/AGENTS.md" "$_pi_profile_dir/AGENTS.md"
