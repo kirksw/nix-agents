@@ -100,6 +100,38 @@
         codexProfileMeta = mkProfileMeta "codex";
         piProfileMeta = mkProfileMeta "pi";
 
+        opencodeWrapper = library.mkWrappedTool {
+          inherit pkgs;
+          target = "opencode";
+          tool = agentPkgs.opencode;
+          agentSystem = opencodeConfig;
+          profileMeta = opencodeProfileMeta;
+        };
+
+        claudeWrapper = library.mkWrappedTool {
+          inherit pkgs;
+          target = "claude";
+          tool = agentPkgs.claude-code;
+          agentSystem = claudeConfig;
+          profileMeta = claudeProfileMeta;
+        };
+
+        codexWrapper = library.mkWrappedTool {
+          inherit pkgs;
+          target = "codex";
+          tool = agentPkgs.codex;
+          agentSystem = codexConfig;
+          profileMeta = codexProfileMeta;
+        };
+
+        piWrapper = library.mkWrappedTool {
+          inherit pkgs;
+          target = "pi";
+          tool = agentPkgs.pi;
+          agentSystem = piConfig;
+          profileMeta = piProfileMeta;
+        };
+
         evaluatedConfig = library.evalModules { modules = exampleModules; };
         mermaidGenerator = import ./lib/generators/mermaid.nix { inherit (pkgs) lib; };
         mermaidOutput = mermaidGenerator { inherit (evaluatedConfig.config) agents; };
@@ -118,8 +150,13 @@
             codexConfig
             ampConfig
             piConfig
+            opencodeWrapper
+            claudeWrapper
+            codexWrapper
+            piWrapper
             ;
         };
+
 
         evalCheckNames = builtins.attrNames evals;
 
@@ -155,37 +192,13 @@
           cursor-config = cursorConfig;
           amp-config = ampConfig;
 
-          opencode = library.mkWrappedTool {
-            inherit pkgs;
-            target = "opencode";
-            tool = agentPkgs.opencode;
-            agentSystem = opencodeConfig;
-            profileMeta = opencodeProfileMeta;
-          };
+          opencode = opencodeWrapper;
 
-          claude = library.mkWrappedTool {
-            inherit pkgs;
-            target = "claude";
-            tool = agentPkgs.claude-code;
-            agentSystem = claudeConfig;
-            profileMeta = claudeProfileMeta;
-          };
+          claude = claudeWrapper;
 
-          codex = library.mkWrappedTool {
-            inherit pkgs;
-            target = "codex";
-            tool = agentPkgs.codex;
-            agentSystem = codexConfig;
-            profileMeta = codexProfileMeta;
-          };
+          codex = codexWrapper;
 
-          pi = library.mkWrappedTool {
-            inherit pkgs;
-            target = "pi";
-            tool = agentPkgs.pi;
-            agentSystem = piConfig;
-            profileMeta = piProfileMeta;
-          };
+          pi = piWrapper;
 
           default = opencodeConfig;
         };
