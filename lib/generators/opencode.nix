@@ -6,6 +6,7 @@
 }:
 let
   agentsMdGenerator = import ./agents-md.nix { inherit lib; };
+  tierManifestGenerator = import ./tier-manifest.nix { inherit lib; };
   shared = import ./shared.nix { inherit lib; };
   preamble = shared.mkHumanPreamble config.human;
 
@@ -33,6 +34,14 @@ let
   };
   tierModels = generatorDefaults // config.tierMapping;
   resolveModel = m: tierModels.${m} or m;
+
+  # Derived model-tier manifest (see docs/adr/ADR-0003-generated-tier-manifest.md).
+  # Surfaced as an output attribute so targets that reuse this generator (pi) can
+  # append it to the AGENTS.md they load at startup.
+  tierManifest = tierManifestGenerator {
+    inherit (config) agents;
+    inherit tierModels;
+  };
 
   defaults = config.defaultPermissions;
   resolvePermField = field: agentPerm: if agentPerm != null then agentPerm else defaults.${field};
@@ -145,6 +154,7 @@ in
 {
   agents = agentsOutput;
   skills = skillSkel;
+  inherit tierManifest;
   agentsMd =
     if workflowGuide != "" then workflowGuide else agentsMdGenerator { inherit (config) agents; };
   agentListMd = agentsMdGenerator { inherit (config) agents; };

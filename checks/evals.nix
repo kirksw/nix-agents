@@ -6,6 +6,10 @@
   codexConfig,
   ampConfig,
   piConfig,
+  opencodeWrapper,
+  claudeWrapper,
+  codexWrapper,
+  piWrapper,
 }:
 {
   eval-skill-content = pkgs.runCommand "eval-skill-content" { } ''
@@ -66,6 +70,78 @@
   eval-pi-config = pkgs.runCommand "eval-pi-config" { } ''
     test -f ${piConfig}/agents/my-agent.md
     test -f ${piConfig}/AGENTS.md
+    touch $out
+  '';
+
+  eval-tier-manifest = pkgs.runCommand "eval-tier-manifest" { } ''
+    manifest="${piConfig}/AGENTS.md"
+    grep -q '<!-- nix-agents:tier-manifest:start -->' "$manifest" || {
+      echo "FAIL: tier-manifest start marker missing" >&2
+      exit 1
+    }
+    grep -q '<!-- nix-agents:tier-manifest:end -->' "$manifest" || {
+      echo "FAIL: tier-manifest end marker missing" >&2
+      exit 1
+    }
+    grep -Eq '^\| (fast|balanced|powerful|reasoning|ultrafast) \| .+ \|' "$manifest" || {
+      echo "FAIL: tier -> model table row missing" >&2
+      exit 1
+    }
+    touch $out
+  '';
+
+  wrapper-sync-mode = pkgs.runCommand "wrapper-sync-mode" { } ''
+    codexWrapperPath=${codexWrapper}/bin/codex
+    piWrapperPath=${piWrapper}/bin/pi
+
+    for wrapper in "$codexWrapperPath" "$piWrapperPath"; do
+      test -f "$wrapper" || { echo "FAIL: missing wrapper at $wrapper" >&2; exit 1; }
+      grep -Fq '_NAX_SYNC_MODE=' "$wrapper" || {
+        echo "FAIL: sync mode env missing in $wrapper" >&2
+        exit 1
+      }
+      grep -Fq '_nax_should_sync_path()' "$wrapper" || {
+        echo "FAIL: _nax_should_sync_path missing in $wrapper" >&2
+        exit 1
+      }
+      grep -Fq 'always) return 0' "$wrapper" || {
+        echo "FAIL: syncMode always branch missing in $wrapper" >&2
+        exit 1
+      }
+      grep -Fq 'never) return 1' "$wrapper" || {
+        echo "FAIL: syncMode never branch missing in $wrapper" >&2
+        exit 1
+      }
+      grep -Fq 'bootstrap) [ ! -e "$target_path" ]' "$wrapper" || {
+        echo "FAIL: syncMode bootstrap branch missing in $wrapper" >&2
+        exit 1
+      }
+
+      common_line=$(grep -n "_sync_common_profile_assets \"\$_NAX_TOOL_CONFIG_DIR\"" "$wrapper" | head -n1 | cut -d: -f1)
+      hook_line=$(grep -n "_run_hook session-start" "$wrapper" | head -n1 | cut -d: -f1)
+      [ -n "$common_line" ] || {
+        echo "FAIL: _sync_common_profile_assets not found in $wrapper" >&2
+        exit 1
+      }
+      [ -n "$hook_line" ] || {
+        echo "FAIL: _run_hook session-start not found in $wrapper" >&2
+        exit 1
+      }
+      [ "$common_line" -lt "$hook_line" ] || {
+        echo "FAIL: common asset sync must occur before session-start in $wrapper" >&2
+        exit 1
+      }
+    done
+
+    grep -Fq '_sync_link_dir_force "$_pi_state_dir/sessions" "$_pi_profile_dir/sessions"' "$piWrapperPath" || {
+      echo "FAIL: Pi sessions sync must be unconditional" >&2
+      exit 1
+    }
+    if grep -Fq '_sync_link_dir "$_pi_state_dir/sessions" "$_pi_profile_dir/sessions"' "$piWrapperPath"; then
+      echo "FAIL: Pi sessions sync must not go through gated _sync_link_dir" >&2
+      exit 1
+    fi
+
     touch $out
   '';
 

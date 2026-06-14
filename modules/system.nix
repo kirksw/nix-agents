@@ -255,7 +255,7 @@ in
       default = { };
       description = ''
         Override model tier to concrete model-string mappings.
-        Keys: fast, balanced, powerful, reasoning.
+        Keys: fast, ultrafast, balanced, powerful, reasoning.
         Generators merge these over their built-in defaults.
       '';
       example = {
