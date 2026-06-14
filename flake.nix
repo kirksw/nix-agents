@@ -157,7 +157,6 @@
             ;
         };
 
-
         evalCheckNames = builtins.attrNames evals;
 
         benchScript = pkgs.writeShellScriptBin "bench" ''
