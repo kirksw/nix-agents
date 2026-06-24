@@ -3,6 +3,7 @@
 {
   lib,
   config,
+  src ? null,
   ...
 }:
 let
@@ -127,6 +128,15 @@ in
 {
   agents = agentsOutput;
   inherit skills;
-  agentsMd = agentsMdGenerator { inherit (config) agents; };
+  agentsMd =
+    let
+      generated = agentsMdGenerator { inherit (config) agents; };
+      workflowGuide =
+        if src != null then
+          builtins.unsafeDiscardStringContext (builtins.readFile (src + "/AGENTS.md"))
+        else
+          "";
+    in
+    if workflowGuide != "" then workflowGuide + "\n\n" + generated else generated;
   inherit mcpToml;
 }
