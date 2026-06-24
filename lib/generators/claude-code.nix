@@ -2,11 +2,18 @@
   lib,
   config,
   pkgs ? null,
+  src ? null,
   ...
 }:
 let
   agentsMdGenerator = import ./agents-md.nix { inherit lib; };
   shared = import ./shared.nix { inherit lib; };
+
+  workflowGuide =
+    if src != null then
+      builtins.unsafeDiscardStringContext (builtins.readFile (src + "/AGENTS.md"))
+    else
+      "";
   preamble = shared.mkHumanPreamble config.human;
 
   generatorDefaults = {
@@ -244,5 +251,9 @@ in
   agentsMd = agentsMdGenerator { inherit (config) agents; };
   mcpJson = builtins.toJSON { mcpServers = mcpEntries; };
   settingsJson = builtins.toJSON settings;
-  claudeMd = agentsMdGenerator { inherit (config) agents; };
+  claudeMd =
+    if workflowGuide != "" then
+      workflowGuide + "\n\n" + agentsMdGenerator { inherit (config) agents; }
+    else
+      agentsMdGenerator { inherit (config) agents; };
 }
