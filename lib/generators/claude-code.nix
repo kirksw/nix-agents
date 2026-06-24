@@ -66,15 +66,15 @@ let
     withRules;
 
   formatPermission =
-    permission: prefix:
+    permission: tool:
     let
       buckets = bucketPermissions permission;
-      toRule = prefix: entries: map (entry: "${prefix}:${entry}") entries;
+      toRule = entries: map (entry: if entry == "*" then tool else "${tool}(${entry})") entries;
     in
     {
-      allow = toRule prefix buckets.allow;
-      deny = toRule prefix buckets.deny;
-      ask = toRule prefix buckets.ask;
+      allow = toRule buckets.allow;
+      deny = toRule buckets.deny;
+      ask = toRule buckets.ask;
     };
 
   renderPermissionArrays =
@@ -88,9 +88,9 @@ let
       bash = formatPermission bashPerm "Bash";
       task = formatPermission taskPerm "Task";
       webfetch = {
-        allow = if webfetchPerm == "allow" then [ "Webfetch:*" ] else [ ];
-        deny = if webfetchPerm == "deny" then [ "Webfetch:*" ] else [ ];
-        ask = if webfetchPerm == "ask" then [ "Webfetch:*" ] else [ ];
+        allow = if webfetchPerm == "allow" then [ "WebFetch" ] else [ ];
+        deny = if webfetchPerm == "deny" then [ "WebFetch" ] else [ ];
+        ask = if webfetchPerm == "ask" then [ "WebFetch" ] else [ ];
       };
     in
     {

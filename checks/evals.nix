@@ -36,6 +36,10 @@
     pkgs.runCommand "eval-claude-settings" { nativeBuildInputs = [ pkgs.jq ]; }
       ''
         jq -e '.permissions.allow | type == "array"' ${claudeConfig}/settings.json > /dev/null
+        jq -e '.permissions.allow | index("Edit") and index("Bash(git *)")' ${claudeConfig}/settings.json > /dev/null
+        jq -e '.permissions.deny | index("Bash") and index("Task")' ${claudeConfig}/settings.json > /dev/null
+        jq -e '.permissions.ask | index("WebFetch")' ${claudeConfig}/settings.json > /dev/null
+        jq -e '[.permissions.allow[], .permissions.deny[], .permissions.ask[]] | all(test("^[A-Za-z]+:") | not)' ${claudeConfig}/settings.json > /dev/null
         touch $out
       '';
 
