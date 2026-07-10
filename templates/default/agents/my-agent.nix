@@ -2,7 +2,7 @@
   agents.my-agent = {
     description = "A custom agent tailored for your project.";
     mode = "subagent";
-    model = "anthropic/claude-sonnet-4-5";
+    model = "S";
     temperature = 0.3;
     reasoningEffort = "medium";
 

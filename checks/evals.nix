@@ -72,8 +72,11 @@
   '';
 
   eval-pi-config = pkgs.runCommand "eval-pi-config" { } ''
-    test -f ${piConfig}/agents/my-agent.md
+    agent="${piConfig}/agents/my-agent.md"
+    test -f "$agent"
     test -f ${piConfig}/AGENTS.md
+    grep -q '^model: anthropic/claude-sonnet-4-5$' "$agent"
+    grep -q '^fallbackModels: \["anthropic/claude-haiku-4-5-20251001"\]$' "$agent"
     touch $out
   '';
 
@@ -87,8 +90,8 @@
       echo "FAIL: tier-manifest end marker missing" >&2
       exit 1
     }
-    grep -Eq '^\| (fast|balanced|powerful|reasoning|ultrafast) \| .+ \|' "$manifest" || {
-      echo "FAIL: tier -> model table row missing" >&2
+    grep -Eq '^\| S \| anthropic/claude-sonnet-4-5 \| anthropic/claude-haiku-4-5-20251001 \|$' "$manifest" || {
+      echo "FAIL: tier -> model-chain table row missing" >&2
       exit 1
     }
     touch $out

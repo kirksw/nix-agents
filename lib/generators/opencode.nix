@@ -2,6 +2,7 @@
   lib,
   config,
   src ? null,
+  includeFallbackModels ? false,
   ...
 }:
 let
@@ -32,15 +33,19 @@ let
     powerful = "zai/glm-5.1";
     reasoning = "zai/glm-5.1";
   };
-  tierModels = generatorDefaults // config.tierMapping;
-  resolveModel = m: tierModels.${m} or m;
+  tierModels = shared.normalizeTierMapping generatorDefaults config.tierMapping;
+  resolveModel = shared.resolveTierModel tierModels;
+  configuredTierModels = lib.filterAttrs (
+    tier: _:
+    config.tierMapping ? ${tier} || lib.any (agent: agent.model == tier) (lib.attrValues config.agents)
+  ) tierModels;
 
   # Derived model-tier manifest (see docs/adr/ADR-0003-generated-tier-manifest.md).
   # Surfaced as an output attribute so targets that reuse this generator (pi) can
   # append it to the AGENTS.md they load at startup.
   tierManifest = tierManifestGenerator {
     inherit (config) agents;
-    inherit tierModels;
+    tierModels = configuredTierModels;
   };
 
   defaults = config.defaultPermissions;
@@ -77,13 +82,17 @@ let
   renderFrontmatter =
     name: agent:
     let
+      fallbacks = shared.resolveTierFallbackModels tierModels agent.model;
       lines = [
         "name: ${name}"
         "description: ${agent.description}"
         "mode: ${agent.mode}"
         "model: ${resolveModel agent.model}"
-        "temperature: ${toString agent.temperature}"
       ]
+      ++ lib.optional (
+        includeFallbackModels && fallbacks != [ ]
+      ) "fallbackModels: ${builtins.toJSON fallbacks}"
+      ++ [ "temperature: ${toString agent.temperature}" ]
       ++ lib.optional (agent.reasoningEffort != null) "reasoningEffort: ${agent.reasoningEffort}"
       ++ (
         let
@@ -154,7 +163,11 @@ in
 {
   agents = agentsOutput;
   skills = skillSkel;
-  inherit tierManifest;
+  inherit
+    tierManifest
+    tierModels
+    resolveModel
+    ;
   agentsMd =
     if workflowGuide != "" then workflowGuide else agentsMdGenerator { inherit (config) agents; };
   agentListMd = agentsMdGenerator { inherit (config) agents; };

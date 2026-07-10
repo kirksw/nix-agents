@@ -22,8 +22,8 @@ let
     powerful = "claude-sonnet-4-6";
     reasoning = "claude-opus-4-6";
   };
-  tierModels = generatorDefaults // config.tierMapping;
-  resolveModel = m: tierModels.${m} or m;
+  tierModels = shared.normalizeTierMapping generatorDefaults config.tierMapping;
+  resolveModel = shared.resolveTierModel tierModels;
 
   defaults = config.defaultPermissions;
   resolvePermField = field: agentPerm: if agentPerm != null then agentPerm else defaults.${field};

@@ -538,9 +538,9 @@ let
         description = "Human context override for this profile.";
       };
       tierMapping = mkOption {
-        type = types.attrsOf types.str;
+        type = types.attrsOf (types.either types.str (types.nonEmptyListOf types.str));
         default = { };
-        description = "Profile-local tier overrides merged over system tierMapping.";
+        description = "Profile-local tier overrides with a model string or ordered fallback chain.";
       };
       permissions = mkOption {
         type = types.nullOr permissionsType;

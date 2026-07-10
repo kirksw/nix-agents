@@ -17,8 +17,8 @@ let
     powerful = "gpt-4.1";
     reasoning = "o3";
   };
-  tierModels = generatorDefaults // config.tierMapping;
-  resolveModel = m: tierModels.${m} or m;
+  tierModels = shared.normalizeTierMapping generatorDefaults config.tierMapping;
+  resolveModel = shared.resolveTierModel tierModels;
 
   defaults = config.defaultPermissions;
   resolvePermField = field: agentPerm: if agentPerm != null then agentPerm else defaults.${field};
