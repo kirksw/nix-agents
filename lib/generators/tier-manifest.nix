@@ -1,7 +1,7 @@
 # Renders a model-tier manifest as markdown, derived solely from data already
-# computed during generation: `tierModels` (resolved generatorDefaults //
-# config.tierMapping) and `config.agents` (each agent's `model` field, which is
-# either a tier key or a concrete model id).
+# computed during generation: `tierModels` (resolved ordered model chains) and
+# `config.agents` (each agent's `model` field, which is either a tier key or a
+# concrete model id).
 #
 # The manifest lets downstream agents reason about tier peers for sparring,
 # backup failover, and peer review. See docs/adr/ADR-0003-generated-tier-manifest.md.
@@ -12,6 +12,12 @@
 }:
 let
   tierOrder = [
+    "S"
+    "A"
+    "B"
+    "C"
+    "D"
+    "E"
     "ultrafast"
     "fast"
     "balanced"
@@ -40,14 +46,15 @@ let
     acc // { ${t} = (acc.${t} or [ ]) ++ [ name ]; }
   ) { } (builtins.attrNames agents);
 
-  # Render a single tier group. `tier` is a tier key; `model` is its resolved
-  # concrete id (for the "other" group, there is no single model so we omit it).
+  # Render a single tier group. `tier` is a tier key; its ordered chain starts
+  # with the default model and continues with provider/model fallbacks.
   renderGroup =
     tier:
     let
       members = agentsByTier.${tier} or [ ];
-      model = tierModels.${tier} or null;
-      heading = if model != null then "**${tier}** — ${model}" else "**${tier}**";
+      chain = tierModels.${tier} or null;
+      heading =
+        if chain != null then "**${tier}** — ${lib.concatStringsSep " → " chain}" else "**${tier}**";
       memberLine = lib.concatStringsSep ", " (map (n: "`${n}`") members);
     in
     if members == [ ] then
@@ -74,7 +81,15 @@ let
 
         ${lib.concatStringsSep "\n" lines}'';
 
-  tierTableRows = lib.concatStringsSep "\n" (map (t: "| ${t} | ${tierModels.${t}} |") orderedTiers);
+  tierTableRows = lib.concatStringsSep "\n" (
+    map (
+      t:
+      let
+        chain = tierModels.${t};
+      in
+      "| ${t} | ${builtins.head chain} | ${lib.concatStringsSep " → " (lib.tail chain)} |"
+    ) orderedTiers
+  );
 
   body = lib.concatStringsSep "\n\n" (
     builtins.filter (s: s != "") [
@@ -87,13 +102,13 @@ in
   <!-- nix-agents:tier-manifest:start -->
   ## Model Tiers (generated)
 
-  Tier keys resolve to concrete models per-profile from `tierMapping`. Each agent's
-  `model` field is a tier key resolved at generation time.
+  Tier keys resolve to ordered model chains per-profile from `tierMapping`. Each
+  agent's `model` field is a tier key resolved at generation time.
 
-  ### Tier → model
+  ### Tier → model chain
 
-  | Tier | Resolved model |
-  |------|----------------|
+  | Tier | Default model | Ordered fallbacks |
+  |------|---------------|-------------------|
   ${tierTableRows}
 
   ### Agents by tier

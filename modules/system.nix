@@ -251,16 +251,19 @@ in
     };
 
     tierMapping = lib.mkOption {
-      type = lib.types.attrsOf lib.types.str;
+      type = lib.types.attrsOf (lib.types.either lib.types.str (lib.types.nonEmptyListOf lib.types.str));
       default = { };
       description = ''
-        Override model tier to concrete model-string mappings.
-        Keys: fast, ultrafast, balanced, powerful, reasoning.
-        Generators merge these over their built-in defaults.
+        Override model tiers with a model string or ordered fallback chain.
+        Generators use the first model as the default and targets with fallback support
+        retry the remaining models for provider/model failures.
       '';
       example = {
-        fast = "anthropic/claude-haiku-4-5-20251001";
-        reasoning = "anthropic/claude-opus-4-6";
+        S = [
+          "openai/gpt-5.6-sol"
+          "anthropic/claude-fable-5"
+        ];
+        D = "openai/gpt-5.3-codex-spark";
       };
     };
 

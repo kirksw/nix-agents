@@ -36,6 +36,14 @@ let
   };
 in
 {
+  normalizeTierMapping =
+    defaults: mapping:
+    lib.mapAttrs (_: chain: if builtins.isList chain then chain else [ chain ]) (defaults // mapping);
+
+  resolveTierModel = tierChains: model: builtins.head (tierChains.${model} or [ model ]);
+
+  resolveTierFallbackModels = tierChains: model: lib.tail (tierChains.${model} or [ model ]);
+
   mkManagedAgentsSection =
     agents: managedNames:
     let

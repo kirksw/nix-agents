@@ -62,6 +62,11 @@
               providers = [ "example-key" ];
             };
 
+            tierMapping.S = [
+              "anthropic/claude-sonnet-4-5"
+              "anthropic/claude-haiku-4-5-20251001"
+            ];
+
             profiles.default = {
               base = "default";
               agents = [ "my-agent" ];

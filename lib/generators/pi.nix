@@ -5,7 +5,10 @@
   ...
 }:
 let
-  opencodeGenerator = import ./opencode.nix { inherit lib config; };
+  opencodeGenerator = import ./opencode.nix {
+    inherit lib config;
+    includeFallbackModels = true;
+  };
   agentsMdGenerator = import ./agents-md.nix { inherit lib; };
 
   workflowGuide =
