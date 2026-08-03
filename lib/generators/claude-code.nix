@@ -106,12 +106,14 @@ let
       body = {
         inherit name;
         inherit (agent) description;
-        model = resolveModel agent.model;
         inherit (agent) mode;
         inherit (agent) delegatesTo;
         inherit (agent) temperature;
         inherit (agent) reasoningEffort;
         permissions = renderPermissionArrays agent;
+      }
+      // lib.optionalAttrs (agent.model != null) {
+        model = resolveModel agent.model;
       };
     in
     "---\n${builtins.toJSON body}\n---\n";

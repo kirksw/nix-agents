@@ -49,9 +49,11 @@ let
         inherit name;
         inherit (agent) description;
         inherit (agent) mode;
-        model = resolveModel agent.model;
         inherit (agent) delegatesTo;
         inherit (agent) temperature;
+      }
+      // lib.optionalAttrs (agent.model != null) {
+        model = resolveModel agent.model;
       }
       # reasoningEffort is meaningful for o3 and o4-mini; omit when null.
       // lib.optionalAttrs (agent.reasoningEffort != null) {

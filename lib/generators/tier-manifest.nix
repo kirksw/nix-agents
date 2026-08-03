@@ -33,18 +33,20 @@ let
   );
   orderedTiers = knownTiers ++ extraTiers;
 
-  # Classify each agent: is its `model` a tier key, or a concrete model id?
-  # A "tier key" is any key present in tierModels.
+  # Classify each modelled agent: is its `model` a tier key, or a concrete model id?
+  # A "tier key" is any key present in tierModels. Model-less agents are not part
+  # of the model-tier manifest.
+  modelledAgents = lib.filterAttrs (_: agent: agent.model != null) agents;
   agentTier = agent: if tierModels ? ${agent.model} then agent.model else "other";
 
   agentsByTier = lib.foldl' (
     acc: name:
     let
-      agent = agents.${name};
+      agent = modelledAgents.${name};
       t = agentTier agent;
     in
     acc // { ${t} = (acc.${t} or [ ]) ++ [ name ]; }
-  ) { } (builtins.attrNames agents);
+  ) { } (builtins.attrNames modelledAgents);
 
   # Render a single tier group. `tier` is a tier key; its ordered chain starts
   # with the default model and continues with provider/model fallbacks.

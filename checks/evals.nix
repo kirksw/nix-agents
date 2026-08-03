@@ -6,6 +6,10 @@
   codexConfig,
   ampConfig,
   piConfig,
+  modelLessOpencodeConfig,
+  modelLessClaudeConfig,
+  modelLessCodexConfig,
+  modelLessPiConfig,
   opencodeWrapper,
   claudeWrapper,
   codexWrapper,
@@ -29,6 +33,57 @@
 
   eval-opencode-json = pkgs.runCommand "eval-opencode-json" { nativeBuildInputs = [ pkgs.jq ]; } ''
     jq -e '.mcp | type == "object"' ${opencodeConfig}/opencode.json > /dev/null
+    touch $out
+  '';
+
+  eval-model-less-agents = pkgs.runCommand "eval-model-less-agents" { } ''
+    for config in \
+      ${modelLessOpencodeConfig} \
+      ${modelLessPiConfig}
+    do
+      agent="$config/agents/model-less.md"
+      test -f "$agent"
+      if grep -qE '^(model|fallbackModels):' "$agent"; then
+        echo "FAIL: model-less OpenCode/Pi agent has model frontmatter" >&2
+        exit 1
+      fi
+      if grep -q 'fallbackModels' "$agent"; then
+        echo "FAIL: model-less OpenCode/Pi agent has fallbackModels frontmatter" >&2
+        exit 1
+      fi
+      configured="$config/agents/configured-model.md"
+      grep -qE '^(model:|.*"model":)' "$configured" || {
+        echo "FAIL: configured agent lost model frontmatter" >&2
+        exit 1
+      }
+    done
+
+    for config in \
+      ${modelLessClaudeConfig} \
+      ${modelLessCodexConfig}
+    do
+      agent="$config/agents/model-less.md"
+      test -f "$agent"
+      if grep -q '"model"' "$agent"; then
+        echo "FAIL: model-less Claude Code/Codex agent has model frontmatter" >&2
+        exit 1
+      fi
+      configured="$config/agents/configured-model.md"
+      grep -q '"model"' "$configured" || {
+        echo "FAIL: configured agent lost model frontmatter" >&2
+        exit 1
+      }
+    done
+
+    manifest="${modelLessPiConfig}/AGENTS.md"
+    grep -q '`configured-model`' "$manifest" || {
+      echo "FAIL: configured agent missing from tier manifest" >&2
+      exit 1
+    }
+    if grep -q '`model-less`' "$manifest"; then
+      echo "FAIL: model-less agent present in tier manifest" >&2
+      exit 1
+    fi
     touch $out
   '';
 
