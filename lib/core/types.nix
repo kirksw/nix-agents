@@ -92,13 +92,16 @@ let
         description = "One line description for tool UIs.";
       };
       model = mkOption {
-        type = types.either (types.enum [
-          "fast"
-          "balanced"
-          "powerful"
-          "reasoning"
-        ]) types.str;
-        description = "Model capability tier or explicit model string.";
+        type = types.nullOr (
+          types.either (types.enum [
+            "fast"
+            "balanced"
+            "powerful"
+            "reasoning"
+          ]) types.str
+        );
+        default = null;
+        description = "Model capability tier or explicit model string. Null uses the target's default model.";
       };
       mode = mkOption {
         type = types.enum [

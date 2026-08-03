@@ -82,15 +82,16 @@ let
   renderFrontmatter =
     name: agent:
     let
-      fallbacks = shared.resolveTierFallbackModels tierModels agent.model;
+      fallbacks =
+        if agent.model == null then [ ] else shared.resolveTierFallbackModels tierModels agent.model;
       lines = [
         "name: ${name}"
         "description: ${agent.description}"
         "mode: ${agent.mode}"
-        "model: ${resolveModel agent.model}"
       ]
+      ++ lib.optional (agent.model != null) "model: ${resolveModel agent.model}"
       ++ lib.optional (
-        includeFallbackModels && fallbacks != [ ]
+        agent.model != null && includeFallbackModels && fallbacks != [ ]
       ) "fallbackModels: ${builtins.toJSON fallbacks}"
       ++ [ "temperature: ${toString agent.temperature}" ]
       ++ lib.optional (agent.reasoningEffort != null) "reasoningEffort: ${agent.reasoningEffort}"

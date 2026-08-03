@@ -85,6 +85,32 @@
             src = if target == "opencode" then ./templates/default else null;
           };
 
+        modelLessModules = [
+          {
+            agents.model-less = {
+              description = "Agent used to verify inherited model selection.";
+              prompt = "Follow the task exactly.";
+            };
+            agents.configured-model = {
+              description = "Agent used to verify explicit model selection.";
+              model = "fast";
+              prompt = "Follow the task exactly.";
+            };
+          }
+        ];
+
+        mkModelLessTargetConfig =
+          target:
+          library.mkAgentSystem {
+            inherit pkgs target;
+            modules = modelLessModules;
+          };
+
+        modelLessOpencodeConfig = mkModelLessTargetConfig "opencode";
+        modelLessClaudeConfig = mkModelLessTargetConfig "claude";
+        modelLessCodexConfig = mkModelLessTargetConfig "codex";
+        modelLessPiConfig = mkModelLessTargetConfig "pi";
+
         opencodeConfig = mkTargetConfig "opencode";
         claudeConfig = mkTargetConfig "claude";
         codexConfig = mkTargetConfig "codex";
@@ -155,6 +181,10 @@
             codexConfig
             ampConfig
             piConfig
+            modelLessOpencodeConfig
+            modelLessClaudeConfig
+            modelLessCodexConfig
+            modelLessPiConfig
             opencodeWrapper
             claudeWrapper
             codexWrapper
